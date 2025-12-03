@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.DS_Store
+.vscode/
+images/
+logs/
+tests/
+*.png
+*.jpg
+*.jpeg
+*.tiff
+*.tif
