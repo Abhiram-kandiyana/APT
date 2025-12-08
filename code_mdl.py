@@ -379,33 +379,46 @@ def tokenizer(c: Caption) -> List[int]:
 # ============================================================
 
 def caption_complexity(
-    c: Caption,
+    c: Union[Caption, List[Caption]],
     prompt_set: PromptSet,
     prompt_embeddings: np.ndarray,
     alpha: float = 0.01,
     beta: float = 0.1,
-) -> float:
+) -> Union[float, List[float]]:
     """
     C(c;P) = alpha * len(c) + beta * max_sim(psi(c), psi(c')).
+    Supports batch processing.
     """
-    tokens = tokenizer(c)
-    L = len(tokens)
-    length_penalty = alpha * L
+    is_batch = isinstance(c, list)
+    captions = c if is_batch else [c]
+
+    # Batch tokenization
+    lengths = [len(tokenizer(cap)) for cap in captions]
+    length_penalties = [alpha * L for L in lengths]
 
     if len(prompt_set) == 0:
-        redundancy_penalty = 0.0
+        redundancy_penalties = [0.0] * len(captions)
     else:
-        e_c = text_encoder([c])[0]
-        e_c_norm = e_c / (np.linalg.norm(e_c) + 1e-8)
-
+        e_c_batch = text_encoder(captions)
+        # Normalize
+        e_c_norm = e_c_batch / (np.linalg.norm(e_c_batch, axis=1, keepdims=True) + 1e-8)
+        
         P_norm = prompt_embeddings / (
             np.linalg.norm(prompt_embeddings, axis=1, keepdims=True) + 1e-8
         )
-        sims = (P_norm @ e_c_norm)
-        max_sim = float(np.max(sims))
-        redundancy_penalty = beta * max_sim
+        # sims: (num_prompts, num_captions) = (num_prompts, d) @ (num_captions, d).T
+        # We want max similarity for each caption against all prompts
+        # sims shape: (num_prompts, num_captions)
+        sims = P_norm @ e_c_norm.T
+        max_sims = np.max(sims, axis=0) # Shape (num_captions,)
+        redundancy_penalties = (beta * max_sims).tolist()
 
-    return length_penalty + redundancy_penalty
+    results = [l + r for l, r in zip(length_penalties, redundancy_penalties)]
+
+    if is_batch:
+        return results
+    else:
+        return results[0]
 
 
 def description_length(
@@ -461,36 +474,61 @@ def get_stochastic_params(K: int) -> List[Tuple[float, float]]:
     return params
 
 def uncertainty(
-    x: Image,
+    x: Union[Image, List[Image]],
     system_prompt_1: str,
     system_prompt_2: str,
     prompt_set: PromptSet,
     K: int = 5,
     **gen_kwargs
-) -> float:
+) -> Union[float, List[float]]:
     """
     u(x;P) = 1 - max_y p_hat(y | x), using K stochastic calls.
+    Supports batch processing.
     """
+    is_batch = isinstance(x, list)
+    images = x if is_batch else [x]
+    
+    # image_predictions[img_idx] = [pred1, pred2, ..., predK]
+    image_predictions = [[] for _ in images]
+    
+    cached_preds = {}
+    if gen_kwargs.get("debug", False):
+        cached_preds = load_cached_preds(gen_kwargs)
 
-    labels = []
     for i in range(K):
-        cached_preds = {}
-        if gen_kwargs.get("debug", False):
-            cached_preds = load_cached_preds(gen_kwargs)
-            
-        if str(x) in cached_preds:
-            y_hat = cached_preds[str(x)]['label']
-        else:
-            y_hat, _ = vlm_query(
-                x, system_prompt_1, system_prompt_2, prompt_set,
+        batch_to_query = []
+        indices_to_query = []
+        current_preds = [None] * len(images)
+        
+        for idx, img in enumerate(images):
+            if str(img) in cached_preds:
+                current_preds[idx] = int(cached_preds[str(img)]['label'])
+            else:
+                batch_to_query.append(img)
+                indices_to_query.append(idx)
+        
+        if batch_to_query:
+            results = vlm_query(
+                batch_to_query, system_prompt_1, system_prompt_2, prompt_set,
                 stochastic=True,
                 **gen_kwargs
             )
-        labels.append(int(y_hat))
+            for idx, (y_hat, _) in zip(indices_to_query, results):
+                current_preds[idx] = int(y_hat)
+        
+        for idx, pred in enumerate(current_preds):
+            image_predictions[idx].append(pred)
 
-    counts = Counter(labels)
-    freq_max = max(counts.values())
-    return 1.0 - freq_max / K
+    uncertainties = []
+    for labels in image_predictions:
+        counts = Counter(labels)
+        freq_max = max(counts.values())
+        uncertainties.append(1.0 - freq_max / K)
+        
+    if is_batch:
+        return uncertainties
+    else:
+        return uncertainties[0]
 
 
 # ============================================================
@@ -498,7 +536,7 @@ def uncertainty(
 # ============================================================
 
 def expected_caption_complexity(
-    x: Image,
+    x: Union[Image, List[Image]],
     system_prompt_1: str,
     system_prompt_2: str,
     prompt_set: PromptSet,
@@ -506,31 +544,57 @@ def expected_caption_complexity(
     alpha: float = 0.01,
     beta: float = 0.1,
     **gen_kwargs
-) -> float:
+) -> Union[float, List[float]]:
     """
     \\hat C(x;P) = C(e_hat(x;P);P).
+    Supports batch processing.
     """
+    is_batch = isinstance(x, list)
+    images = x if is_batch else [x]
+
     cached_preds = {}
     if gen_kwargs.get("debug", False):
         cached_preds = load_cached_preds(gen_kwargs)
 
-    if str(x) in cached_preds:
-        caption_hat = f"{cached_preds[str(x)]['rationale']} C: {gen_kwargs.get('label_map')[cached_preds[str(x)]['label']]}"
-    else:
-        label, e_hat = vlm_query(
-            x, system_prompt_1, system_prompt_2, prompt_set,
+    temp_results = [None] * len(images)
+    batch_to_query = []
+    indices_to_query = []
+
+    for idx, img in enumerate(images):
+        if str(img) in cached_preds:
+            entry = cached_preds[str(img)]
+            lbl = gen_kwargs.get('label_map')[entry['label']]
+            cap = f"{entry['rationale']} C: {lbl}"
+            temp_results[idx] = cap
+        else:
+            batch_to_query.append(img)
+            indices_to_query.append(idx)
+
+    if batch_to_query:
+        results = vlm_query(
+            batch_to_query, system_prompt_1, system_prompt_2, prompt_set,
             stochastic=False,
             **gen_kwargs
         )
-        caption_hat = f"{e_hat} C: {gen_kwargs.get('label_map')[label]}"
+        for idx, (label, e_hat) in zip(indices_to_query, results):
+            lbl = gen_kwargs.get('label_map')[label]
+            cap = f"{e_hat} C: {lbl}"
+            temp_results[idx] = cap
 
-    return caption_complexity(
-        caption_hat,
+    captions_hat = temp_results
+
+    complexities = caption_complexity(
+        captions_hat,
         prompt_set,
         prompt_embeddings,
         alpha=alpha,
         beta=beta,
     )
+
+    if is_batch:
+        return complexities
+    else:
+        return complexities[0]
 
 
 # ============================================================
@@ -538,7 +602,7 @@ def expected_caption_complexity(
 # ============================================================
 
 def selection_score(
-    x: Image,
+    x: Union[Image, List[Image]],
     system_prompt_1: str,
     system_prompt_2: str,
     prompt_set: PromptSet,
@@ -548,16 +612,23 @@ def selection_score(
     alpha: float = 0.01,
     beta: float = 0.1,
     **gen_kwargs
-) -> float:
+) -> Union[float, List[float]]:
     """
     s(x;P) = u(x;P) - lambda_c * \\hat C(x;P).
+    Supports batch processing.
     """
+    is_batch = isinstance(x, list)
+    
     u_x = uncertainty(x, system_prompt_1, system_prompt_2, prompt_set, K=K, **gen_kwargs)
     c_x = expected_caption_complexity(
         x, system_prompt_1, system_prompt_2, prompt_set, prompt_embeddings,
         alpha=alpha, beta=beta, **gen_kwargs
     )
-    return u_x - lambda_c * c_x
+    
+    if is_batch:
+        return [u - lambda_c * c for u, c in zip(u_x, c_x)]
+    else:
+        return u_x - lambda_c * c_x
 
 
 # ============================================================
@@ -1180,16 +1251,22 @@ class APTMDL:
                     processed_count += 1
 
             print(f"Already processed: {processed_count}/{len(all_candidates)}")
-            # Process remaining
-            with tqdm(total=len(all_candidates), initial=processed_count, desc="Calculating Scores") as pbar:
-                for i, entry in enumerate(all_candidates):
-                    if entry["score"] is not None:
-                        continue
-                        
-                    item = tuple(entry["item"])
-                    x, _ = item
-                    s_x = selection_score(
-                        x, self.S_1, self.S_2_template,
+            # Process remaining in batches
+            indices_to_process = [i for i, entry in enumerate(all_candidates) if entry["score"] is None]
+            selection_batch_size = gen_kwargs.get("selection_batch_size", 5)
+            
+            with tqdm(total=len(indices_to_process), desc="Calculating Scores (Batched)") as pbar:
+                for i in range(0, len(indices_to_process), selection_batch_size):
+                    batch_indices = indices_to_process[i : i + selection_batch_size]
+                    batch_entries = [all_candidates[idx] for idx in batch_indices]
+                    
+                    # Extract images
+                    batch_items = [tuple(entry["item"]) for entry in batch_entries]
+                    batch_images = [item[0] for item in batch_items]
+                    
+                    # Calculate scores
+                    scores = selection_score(
+                        batch_images, self.S_1, self.S_2_template,
                         self.prompt_set,
                         prompt_embeddings,
                         lambda_c=self.lambda_c,
@@ -1199,18 +1276,22 @@ class APTMDL:
                         **gen_kwargs
                     )
                     
-                    # Update entry and list
-                    entry["score"] = s_x
-                    candidate_scores.append((s_x, item))
-                    
-                    # Append to log file (Efficient O(1))
-                    try:
-                        with open(intra_round_log_path, 'a', encoding='utf-8') as f:
-                            f.write(json.dumps(entry) + "\n")
-                    except Exception as e:
-                        print(f"Error writing to intra-round log: {e}")
+                    # Update entries and log
+                    for j, score in enumerate(scores):
+                        entry = batch_entries[j]
+                        item = batch_items[j]
                         
-                    pbar.update(1)
+                        entry["score"] = score
+                        candidate_scores.append((score, item))
+                        
+                        # Append to log file
+                        try:
+                            with open(intra_round_log_path, 'a', encoding='utf-8') as f:
+                                f.write(json.dumps(entry) + "\n")
+                        except Exception as e:
+                            print(f"Error writing to intra-round log: {e}")
+                            
+                    pbar.update(len(batch_indices))
             
             
             # Sort by score descending
@@ -1358,6 +1439,8 @@ def parse_arguments():
                         help="Number of examples to select in each active learning round.")
     parser.add_argument("--val_batch_size", type=int, default=5,
                         help="Batch size for VLM queries during validation.")
+    parser.add_argument("--selection_batch_size", type=int, default=5,
+                        help="Batch size for VLM queries during sample selection.")
 
     # VLM generation parameters (passed as gen_kwargs)
     parser.add_argument("--model", type=str, default="gpt-4o",
@@ -1415,6 +1498,7 @@ if __name__ == "__main__":
         unlabeled_data=aptmdl.unlabeled_data,
         val_data=aptmdl.val_data,
         initial_batch_size=args.initial_batch_size,
+        selection_batch_size=args.selection_batch_size,
         model=args.model,
         temperature=args.temperature,
         max_tokens=args.max_tokens,
