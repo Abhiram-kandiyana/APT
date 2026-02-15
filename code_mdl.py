@@ -937,6 +937,7 @@ class APTMDL:
         dts_max_per_basin: int = 2,
         dts_deg_min_tiny: int = 10,
         dts_b_min_tiny: float = 0.6,
+        dts_tune_hparams: bool = True,
         diagnostic_mode: bool = False,
         show_interactive: bool = False,
         diagnostic_every: int = 2,
@@ -977,6 +978,7 @@ class APTMDL:
         self.dts_max_per_basin = dts_max_per_basin
         self.dts_deg_min_tiny = dts_deg_min_tiny
         self.dts_b_min_tiny = dts_b_min_tiny
+        self.dts_tune_hparams = bool(dts_tune_hparams)
         self.dts_tuner_state = {
             "overmerged_streak": 0,
             "fragmented_streak": 0,
@@ -1354,6 +1356,7 @@ class APTMDL:
                 "max_per_basin": int(self.dts_max_per_basin),
                 "deg_min_tiny": int(self.dts_deg_min_tiny),
                 "b_min_tiny": float(self.dts_b_min_tiny),
+                "tune_hparams": bool(self.dts_tune_hparams),
             }
             state["dts_tuner_state"] = {
                 "overmerged_streak": int(self.dts_tuner_state.get("overmerged_streak", 0)),
@@ -1781,6 +1784,8 @@ class APTMDL:
                 clip_batch_size=self.clip_batch_size,
                 use_mutual_knn=self.dts_mutual_knn,
             )
+            if not self.dts_tune_hparams:
+                print("DTS tuner is in log-only mode: hyperparameters will not be mutated.")
 
         for r in range(start_round, self.max_rounds + 1):
             print(f"\n=== Round {r} ===")
@@ -2437,6 +2442,8 @@ class APTMDL:
                 # NOTE: diagnostics purity is intentionally computed after selection and oracle labels
                 # are available, and never fed back into the current round selection decisions.
                 try:
+                    dts_selection_stats = dict(dts_selection_stats or {})
+                    dts_selection_stats["dts_tune_hparams_enabled"] = bool(self.dts_tune_hparams)
                     diagnostics, next_hparams, next_tuner_state = dts_tuner.run_round_diagnostics(
                         round_index=r,
                         n_pool=len(all_candidates),
@@ -2490,13 +2497,16 @@ class APTMDL:
                     print("WARNING [DIVERSITY-LOW]: selected set covers too few basins.")
 
                 self.dts_tuner_state = next_tuner_state
-                self.dts_k = int(next_hparams["k"])
-                self.dts_k_rho = int(next_hparams["k_rho"])
-                self.dts_k_t = int(next_hparams["k_t"])
-                self.dts_k_b = int(next_hparams["k_b"])
-                self.dts_mcluster_min = int(next_hparams["mcluster_min"])
-                self.dts_c_tiny = int(next_hparams["c_tiny"])
-                self.dts_max_per_basin = int(next_hparams["max_per_basin"])
+                if self.dts_tune_hparams:
+                    self.dts_k = int(next_hparams["k"])
+                    self.dts_k_rho = int(next_hparams["k_rho"])
+                    self.dts_k_t = int(next_hparams["k_t"])
+                    self.dts_k_b = int(next_hparams["k_b"])
+                    self.dts_mcluster_min = int(next_hparams["mcluster_min"])
+                    self.dts_c_tiny = int(next_hparams["c_tiny"])
+                    self.dts_max_per_basin = int(next_hparams["max_per_basin"])
+                else:
+                    print("DTS hyperparameter tuning is disabled; keeping current DTS hyperparameters unchanged.")
 
             stop_due_to_accuracy = False
             eval_gen_kwargs = dict(gen_kwargs)
@@ -2655,6 +2665,11 @@ def parse_arguments():
                         help="Tiny-basin fallback gate: minimum mutual degree for tiny basin candidates.")
     parser.add_argument("--dts_b_min_tiny", type=float, default=0.6,
                         help="Tiny-basin fallback gate: minimum boundary score for tiny basin candidates.")
+    parser.add_argument("--dts_tune_hparams", dest="dts_tune_hparams", action="store_true",
+                        help="Enable DTS hyperparameter tuning (default: enabled).")
+    parser.add_argument("--no_dts_tune_hparams", dest="dts_tune_hparams", action="store_false",
+                        help="Disable DTS hyperparameter mutation; diagnostics/tuner decisions are still logged.")
+    parser.set_defaults(dts_tune_hparams=True)
     parser.add_argument("--clip_batch_size", type=int, default=32,
                         help="Batch size used by CLIP image embedding in DTS.")
     parser.add_argument("--diagnostic_mode", action="store_true",
@@ -2813,6 +2828,7 @@ if __name__ == "__main__":
         dts_max_per_basin=args.dts_max_per_basin,
         dts_deg_min_tiny=args.dts_deg_min_tiny,
         dts_b_min_tiny=args.dts_b_min_tiny,
+        dts_tune_hparams=args.dts_tune_hparams,
         diagnostic_mode=args.diagnostic_mode,
         show_interactive=args.show_interactive,
         diagnostic_every=args.diagnostic_every,
