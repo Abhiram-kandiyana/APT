@@ -104,6 +104,7 @@ class DiagnosticsAndTuner:
         diagnostic_every: int = 2,
         diagnostic_seed: int = 0,
         max_images_per_panel: int = 40,
+        clip_model_name: str = "microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224",
         clip_batch_size: int = 32,
         use_mutual_knn: bool = False,
     ):
@@ -115,6 +116,7 @@ class DiagnosticsAndTuner:
         self.diagnostic_every = max(1, int(diagnostic_every))
         self.diagnostic_seed = int(diagnostic_seed)
         self.max_images_per_panel = max(1, int(max_images_per_panel))
+        self.clip_model_name = str(clip_model_name)
         self.clip_batch_size = int(clip_batch_size)
         self.use_mutual_knn = bool(use_mutual_knn)
 
@@ -1309,7 +1311,7 @@ class DiagnosticsAndTuner:
                 k_b=int(hyperparams["k_b"]),
                 use_mutual_knn=self.use_mutual_knn,
                 mcluster_min=int(hyperparams["mcluster_min"]),
-                clip_model_name="openai/clip-vit-base-patch32",
+                clip_model_name=self.clip_model_name,
                 clip_batch_size=self.clip_batch_size,
                 embedding_cache_path=os.path.join(round_dir, "purity_embeddings.npz"),
             )

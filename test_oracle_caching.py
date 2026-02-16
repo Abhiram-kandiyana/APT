@@ -52,6 +52,7 @@ class TestOracleCaching(unittest.TestCase):
         self.aptmdl = APTMDL(
             system_prompt_1_path=self.sp1_path,
             system_prompt_2_path="dummy", # Not used as file anymore
+            selection_method="mdl",
             oracle_path=self.oracle_path,
             debug=False
         )
@@ -65,33 +66,42 @@ class TestOracleCaching(unittest.TestCase):
     @patch("subprocess.run")
     def test_oracle_caching(self, mock_subprocess, mock_vlm_query):
         # Setup mocks
-        # Mock VLM query to return a prediction for the new image
-        mock_vlm_query.return_value = [(1, "Initial VLM rationale")] # 1 -> lurcher
+        # New flow builds prompt files for all images in this round.
+        mock_vlm_query.return_value = [
+            (0, "Cached rationale"),
+            (1, "Initial VLM rationale")
+        ]
         
         # Mock subprocess to simulate tool execution
         # The tool reads input_json and writes output_json
         def side_effect(cmd, check):
-            # Extract input and output paths from cmd
-            # cmd = ["python", "apt_correction_tool_v2.py", "--input_json", tmp_in, "--output_json", tmp_out, ...]
-            input_json_path = cmd[3]
-            output_json_path = cmd[5]
+            # cmd = [python, oracle.py, --input_file, in, --dataset, ds, --output_file, out]
+            input_json_path = cmd[cmd.index("--input_file") + 1]
+            output_json_path = cmd[cmd.index("--output_file") + 1]
             
             # Read input to verify what was sent
             with open(input_json_path, 'r') as f:
                 data = json.load(f)
+            prompts = data["prompts"]
             
-            # Should only contain the new image
-            self.assertEqual(len(data), 1)
-            self.assertEqual(data[0]["image_path"], self.new_image_path)
+            # New integration writes all images of the round.
+            self.assertEqual(len(prompts), 2)
+            self.assertEqual(prompts[0]["image_path"], self.cached_image_path)
+            self.assertEqual(prompts[1]["image_path"], self.new_image_path)
             
             # Write dummy output
-            output_data = [
+            output_data = {"prompts": [
+                {
+                    "image_path": self.cached_image_path,
+                    "class": "wild",
+                    "rationale": "Cached rationale corrected"
+                },
                 {
                     "image_path": self.new_image_path,
-                    "label": "lurcher",
+                    "class": "lurcher",
                     "rationale": "Corrected rationale"
                 }
-            ]
+            ]}
             with open(output_json_path, 'w') as f:
                 json.dump(output_data, f)
                 
@@ -99,7 +109,12 @@ class TestOracleCaching(unittest.TestCase):
 
         # Run oracle_label_and_edit
         images = [self.cached_image_path, self.new_image_path]
-        results = self.aptmdl.oracle_label_and_edit(images, label_map=["wild", "lurcher"])
+        results = self.aptmdl.oracle_label_and_edit(
+            images,
+            label_map=["wild", "lurcher"],
+            dataset="microscopy_lurcher",
+            round_num=1
+        )
         
         # Verify results
         self.assertEqual(len(results), 2)
@@ -107,7 +122,7 @@ class TestOracleCaching(unittest.TestCase):
         # Result 0: From cache
         # wild -> index 0
         self.assertEqual(results[0][0], 0) 
-        self.assertIn("Cached rationale", results[0][1])
+        self.assertIn("Cached rationale corrected", results[0][1])
         
         # Result 1: From tool
         # lurcher -> index 1

@@ -23,6 +23,7 @@ class TestOracleIntegration(unittest.TestCase):
         self.aptmdl = APTMDL(
             system_prompt_1_path="dummy_sp1.md",
             system_prompt_2_path="dummy_sp2.md",
+            selection_method="mdl",
             debug=False # We want to test the real path
         )
         
@@ -41,31 +42,31 @@ class TestOracleIntegration(unittest.TestCase):
         # We need to intercept the command to get the temp file paths
         # and write the expected output to the output file.
         def side_effect(cmd, check=True):
-            # cmd is [python, tool_script, --input_json, in_path, --output_json, out_path, ...]
-            self.assertIn("apt_correction_tool_v2.py", cmd[1])
-            input_json_path = cmd[3]
-            output_json_path = cmd[5]
+            self.assertTrue(cmd[1].endswith("oracle.py"))
+            input_json_path = cmd[cmd.index("--input_file") + 1]
+            output_json_path = cmd[cmd.index("--output_file") + 1]
             
             # Verify input was written correctly
             with open(input_json_path, 'r') as f:
                 data = json.load(f)
-                self.assertEqual(len(data), 2)
-                self.assertEqual(data[0]['label'], 'wild')
-                self.assertEqual(data[1]['label'], 'lurcher')
+                prompts = data["prompts"]
+                self.assertEqual(len(prompts), 2)
+                self.assertEqual(prompts[0]['class'], 'wild')
+                self.assertEqual(prompts[1]['class'], 'lurcher')
                 
             # Simulate user editing: Change label of first image, edit rationale of second
-            corrected_data = [
+            corrected_data = {"prompts": [
                 {
-                    "image_path": data[0]['image_path'],
-                    "label": "lurcher", # Changed from wild
+                    "image_path": prompts[0]['image_path'],
+                    "class": "lurcher", # Changed from wild
                     "rationale": "Rationale 1 Edited"
                 },
                 {
-                    "image_path": data[1]['image_path'],
-                    "label": "lurcher", # Unchanged
+                    "image_path": prompts[1]['image_path'],
+                    "class": "lurcher", # Unchanged
                     "rationale": "Rationale 2 Edited"
                 }
-            ]
+            ]}
             
             # Write output
             with open(output_json_path, 'w') as f:
@@ -77,7 +78,7 @@ class TestOracleIntegration(unittest.TestCase):
         
         # Test Data
         images = ["/path/to/img1.jpg", "/path/to/img2.jpg"]
-        gen_kwargs = {"label_map": ["wild", "lurcher"]}
+        gen_kwargs = {"label_map": ["wild", "lurcher"], "dataset": "microscopy_lurcher", "round_num": 1}
         
         # Run method
         results = self.aptmdl.oracle_label_and_edit(images, **gen_kwargs)

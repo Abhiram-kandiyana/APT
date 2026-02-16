@@ -19,6 +19,7 @@ import json
 import subprocess
 import tempfile
 import sys
+import shutil
 from numbers import Integral
 from pathlib import Path
 from datetime import datetime
@@ -33,6 +34,14 @@ st_model = None
 
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# Short alias -> full Hugging Face model id for DTS image embeddings.
+DTS_CLIP_MODEL_ALIASES: Dict[str, str] = {
+    "biomedclip": "microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224",
+    "clip": "openai/clip-vit-base-patch32",
+}
+DEFAULT_DTS_CLIP_MODEL_ALIAS = "biomedclip"
+DEFAULT_DTS_CLIP_MODEL_NAME = DTS_CLIP_MODEL_ALIASES["biomedclip"]
 
 
 # ============================================================
@@ -90,15 +99,72 @@ def _safe_path_token(value: Any, default: str = "unknown") -> str:
     return token or default
 
 
-def build_dts_run_output_dir(base_outdir: str, dataset_name: str, fold: Optional[int]) -> str:
+def _selection_artifact_token(selection_method: str, dts_clip_model_name: Optional[str] = None) -> str:
+    selection = str(selection_method or "mdl").lower().strip()
+    if selection != "dts":
+        return _safe_path_token(selection, default="mdl")
+
+    model_alias = _dts_clip_model_alias(dts_clip_model_name)
+    if model_alias == "biomedclip":
+        return "dts_biomedclip"
+    if model_alias == "clip":
+        return "dts_clip"
+
+    model_name = str(dts_clip_model_name or "").strip().lower()
+    return f"dts_{_safe_path_token(model_name or 'clip', default='clip')}"
+
+
+def _dts_clip_model_alias(dts_clip_model_name: Optional[str]) -> Optional[str]:
+    model_name = str(dts_clip_model_name or "").strip()
+    if not model_name:
+        return None
+    key = model_name.lower()
+    if key in DTS_CLIP_MODEL_ALIASES:
+        return key
+    for alias, full_name in DTS_CLIP_MODEL_ALIASES.items():
+        if key == str(full_name).lower():
+            return alias
+    return None
+
+
+def _resolve_dts_clip_model_name(dts_clip_model_name: Optional[str]) -> str:
+    model_name = str(dts_clip_model_name or "").strip()
+    if not model_name:
+        return DEFAULT_DTS_CLIP_MODEL_NAME
+    alias = _dts_clip_model_alias(model_name)
+    if alias is not None:
+        return DTS_CLIP_MODEL_ALIASES[alias]
+    return model_name
+
+
+def _resolve_dts_clip_model_from_inputs(
+    dts_clip_model_alias: Optional[str],
+    dts_clip_model_name: Optional[str],
+) -> str:
+    alias = str(dts_clip_model_alias or "").strip().lower()
+    if alias:
+        if alias not in DTS_CLIP_MODEL_ALIASES:
+            valid = ", ".join(sorted(DTS_CLIP_MODEL_ALIASES.keys()))
+            raise ValueError(f"Invalid dts_clip_model_alias='{alias}'. Valid aliases: {valid}")
+        return DTS_CLIP_MODEL_ALIASES[alias]
+    return _resolve_dts_clip_model_name(dts_clip_model_name)
+
+
+def build_dts_run_output_dir(
+    base_outdir: str,
+    dataset_name: str,
+    fold: Optional[int],
+    selection_token: str,
+) -> str:
     """
     Build a unique per-run diagnostics directory:
     diagnostics/<dataset>_fold-<fold>_<timestamp>[/_<n>]
     """
     dataset_token = _safe_path_token(dataset_name, default="dataset")
     fold_token = _safe_path_token(fold, default="na")
+    selection_token = _safe_path_token(selection_token, default="dts")
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    prefix = f"{dataset_token}_fold-{fold_token}_{timestamp}"
+    prefix = f"{dataset_token}_fold-{fold_token}_{selection_token}_{timestamp}"
     root = str(base_outdir or "diagnostics")
 
     candidate = os.path.join(root, prefix)
@@ -199,12 +265,14 @@ def build_round_prompt_paths(
 ) -> Tuple[str, str]:
     """
     Build per-round prompt artifact paths:
-    prompts/<dataset>_prompts/foldX_roundY_prompts_<selection>.json
-    prompts/<dataset>_prompts/foldX_roundY_prompts_<selection>_corrected.json
+    prompt_sets/<dataset>/fold-<fold>/fold<fold>_round<round>_prompts_<selection>.json
+    prompt_sets/<dataset>/fold-<fold>/fold<fold>_round<round>_prompts_<selection>_corrected.json
     """
     round_token = str(round_num)
-    dataset_dir = os.path.join(prompts_root, f"{dataset_name}_prompts")
-    os.makedirs(dataset_dir, exist_ok=True)
+    dataset_token = _safe_path_token(dataset_name, default="dataset")
+    fold_token = _safe_path_token(fold, default="na")
+    fold_dir = os.path.join(prompts_root, dataset_token, f"fold-{fold_token}")
+    os.makedirs(fold_dir, exist_ok=True)
     selection_token = _safe_path_token(
         (selection_method or "mdl").lower().strip(),
         default="mdl",
@@ -216,8 +284,8 @@ def build_round_prompt_paths(
         stem = f"round{round_token}_prompts"
 
     stem = f"{stem}_{selection_token}"
-    input_path = os.path.join(dataset_dir, f"{stem}.json")
-    output_path = os.path.join(dataset_dir, f"{stem}_corrected.json")
+    input_path = os.path.join(fold_dir, f"{stem}.json")
+    output_path = os.path.join(fold_dir, f"{stem}_corrected.json")
     return input_path, output_path
 
 
@@ -927,10 +995,10 @@ class APTMDL:
         mdl_tol: float = 1e-3,
         max_rounds: int = 20,
         candidate_pool_size: int = -1,
-        dts_k: int = 80,
+        dts_k: int = 60,
         dts_k_rho: int = 30,
-        dts_k_t: int = 30,
-        dts_k_b: int = 20,
+        dts_k_t: int = 20,
+        dts_k_b: int = 15,
         dts_mutual_knn: bool = False,
         dts_mcluster_min: int = 20,
         dts_c_tiny: int = 1,
@@ -938,6 +1006,7 @@ class APTMDL:
         dts_deg_min_tiny: int = 10,
         dts_b_min_tiny: float = 0.6,
         dts_tune_hparams: bool = True,
+        dts_clip_model_name: str = DEFAULT_DTS_CLIP_MODEL_NAME,
         diagnostic_mode: bool = False,
         show_interactive: bool = False,
         diagnostic_every: int = 2,
@@ -979,6 +1048,11 @@ class APTMDL:
         self.dts_deg_min_tiny = dts_deg_min_tiny
         self.dts_b_min_tiny = dts_b_min_tiny
         self.dts_tune_hparams = bool(dts_tune_hparams)
+        self.dts_clip_model_name = _resolve_dts_clip_model_name(dts_clip_model_name)
+        self.selection_artifact_token = _selection_artifact_token(
+            selection_method=self.selection_method,
+            dts_clip_model_name=self.dts_clip_model_name,
+        )
         self.dts_tuner_state = {
             "overmerged_streak": 0,
             "fragmented_streak": 0,
@@ -1003,8 +1077,11 @@ class APTMDL:
         self.stopping_accuracy = stopping_accuracy
         self.last_oracle_accuracy = None
         self.last_validation_avg_class_accuracy = None
+        self.last_active_set_metrics = None
+        self.initial_prompt_items: List[Dict[str, Any]] = []
+        self.initial_global_metrics: Dict[str, Any] = {}
         # Keep prompt-set outputs method-specific by default.
-        self.prompt_set_path = with_selection_suffix(prompt_set_path, self.selection_method)
+        self.prompt_set_path = with_selection_suffix(prompt_set_path, self.selection_artifact_token)
         self.logs_dir = logs_dir
         self.fold = fold
 
@@ -1064,9 +1141,9 @@ class APTMDL:
         init_batch = gen_kwargs.get("initial_batch_size", 10)
         temp = gen_kwargs.get("temperature", 0.7)
         
-        log_filename = f"{dataset_name}_selection={self.selection_method}_K_{K}_rounds_{max_rounds}_pool_{pool_size}_batch_{init_batch}_temp={temp}.log"
+        log_filename = f"{dataset_name}_selection={self.selection_artifact_token}_K_{K}_rounds_{max_rounds}_pool_{pool_size}_batch_{init_batch}_temp={temp}.log"
         if self.fold is not None:
-             log_filename = f"{dataset_name}_fold={self.fold}_selection={self.selection_method}_K={K}_rounds={max_rounds}_pool={pool_size}_batch={init_batch}_temp={temp}.log"
+             log_filename = f"{dataset_name}_fold={self.fold}_selection={self.selection_artifact_token}_K={K}_rounds={max_rounds}_pool={pool_size}_batch={init_batch}_temp={temp}.log"
         log_path = os.path.join(self.logs_dir, log_filename)
 
         if not os.path.exists(self.logs_dir):
@@ -1139,7 +1216,7 @@ class APTMDL:
         dataset_name = gen_kwargs.get("dataset", "unknown")
         fold = self.fold if self.fold is not None else gen_kwargs.get("fold")
         round_num = gen_kwargs.get("round_num", 0)
-        prompts_root = gen_kwargs.get("prompts_root", "prompts")
+        prompts_root = gen_kwargs.get("prompts_root", "prompt_sets")
         prompts_in_path, prompts_out_path = build_round_prompt_paths(
             prompts_root=prompts_root,
             dataset_name=dataset_name,
@@ -1150,6 +1227,7 @@ class APTMDL:
 
         prompt_items = []
         pre_by_path = {}
+        pre_label_idx_by_path = {}
         for img, (pred_label_idx, pred_rationale) in zip(images, predictions):
             abs_img = os.path.abspath(str(img))
             label_idx = int(pred_label_idx) if isinstance(pred_label_idx, Integral) else 0
@@ -1165,6 +1243,7 @@ class APTMDL:
                 "explanation": rationale
             })
             pre_by_path[abs_img] = (label_str, rationale)
+            pre_label_idx_by_path[abs_img] = int(label_idx)
 
         payload = {"prompts": prompt_items}
         with open(prompts_in_path, "w", encoding="utf-8") as f:
@@ -1234,6 +1313,50 @@ class APTMDL:
             corrected_by_path[abs_img] = (cls, "" if rationale is None else str(rationale))
             if bool(item.get("manual_corrected", False)):
                 manual_corrected_paths.add(abs_img)
+
+        active_paths: List[str] = []
+        active_y_true: List[int] = []
+        active_y_pred: List[Optional[int]] = []
+        for img in images:
+            abs_img = os.path.abspath(str(img))
+            true_cls, _ = corrected_by_path.get(abs_img, pre_by_path.get(abs_img, (str(label_map[0]), "")))
+            true_idx = label_map.index(true_cls) if true_cls in label_map else 0
+            pred_idx = pre_label_idx_by_path.get(abs_img)
+            active_paths.append(abs_img)
+            active_y_true.append(int(true_idx))
+            active_y_pred.append(int(pred_idx) if pred_idx is not None else None)
+
+        active_class_metrics = self._summarize_class_metrics(
+            image_paths=active_paths,
+            y_true_labels=active_y_true,
+            y_pred_labels=active_y_pred,
+            label_map=list(label_map),
+        )
+        self.last_active_set_metrics = {
+            "round": int(round_num),
+            "active_set_size": int(len(active_paths)),
+            "class_totals": active_class_metrics["class_totals"],
+            "class_correct": active_class_metrics["class_correct"],
+            "case_ids_by_class": active_class_metrics["case_ids_by_class"],
+            "case_ids_correct_by_class": active_class_metrics["case_ids_correct_by_class"],
+            "class_accuracy_pct": active_class_metrics["class_accuracy_pct"],
+            "avg_class_accuracy_pct": active_class_metrics["avg_class_accuracy_pct"],
+            "oracle_accuracy_pct": float(self.last_oracle_accuracy) if self.last_oracle_accuracy is not None else None,
+            "prompts_in_path": prompts_in_path,
+            "prompts_out_path": prompts_out_path,
+        }
+        try:
+            global_prompts_path = self._rebuild_global_prompts_file(
+                prompts_root=str(prompts_root),
+                dataset_name=str(dataset_name),
+                fold=fold,
+                selection_method=self.selection_method,
+                label_map=list(label_map or []),
+            )
+            if global_prompts_path:
+                self.last_active_set_metrics["global_prompts_path"] = str(global_prompts_path)
+        except Exception as e:
+            print(f"Warning: failed to rebuild global prompts file: {e}")
 
         final_results = []
         new_cache_entries = []
@@ -1471,16 +1594,57 @@ class APTMDL:
             data = json.load(f)
             
 
-        seed_examples = []
-        if "prompt" in data:
-            for item in data["prompt"]:
-                rationale = item.get("rationale", "")
-                label = item.get("class", "")
-                # Format: rationale C:label
-                caption = f"{rationale} C: {label}"
-                seed_examples.append((item.get("image_path", ""), caption))
-        
+        seed_examples: List[Tuple[str, str]] = []
+        seed_items: List[Dict[str, Any]] = []
+
+        source_items = []
+        if isinstance(data, dict):
+            if isinstance(data.get("prompt"), list):
+                source_items = data.get("prompt", [])
+            elif isinstance(data.get("prompts"), list):
+                source_items = data.get("prompts", [])
+
+        for raw_item in source_items:
+            if not isinstance(raw_item, dict):
+                continue
+            image_path = str(raw_item.get("image_path", "")).strip()
+            if not image_path:
+                continue
+            rationale = raw_item.get("rationale")
+            if rationale is None:
+                rationale = raw_item.get("explanation", "")
+            rationale = "" if rationale is None else str(rationale)
+
+            label = str(raw_item.get("class", "")).strip()
+            if not label and isinstance(raw_item.get("caption"), str):
+                cap_text = str(raw_item.get("caption"))
+                m = re.search(r"[cC]\s*:\s*([^\n\r]+)", cap_text)
+                if m:
+                    label = m.group(1).strip().split()[0].strip(".,;:*\"'`_[]{}()")
+
+            caption = f"{rationale} C: {label}".strip() if label else rationale
+            seed_examples.append((image_path, caption))
+            seed_items.append({
+                "image_path": image_path,
+                "class": label,
+                "rationale": rationale,
+                "explanation": rationale,
+                "manual_corrected": bool(raw_item.get("manual_corrected", False)),
+            })
+
         self.prompt_set = list(seed_examples)
+        self.initial_prompt_items = list(seed_items)
+        init_acc = None
+        if isinstance(data, dict) and "accuracy" in data and data.get("accuracy") not in (None, ""):
+            try:
+                init_acc = float(data.get("accuracy"))
+            except (TypeError, ValueError):
+                init_acc = None
+        self.initial_global_metrics = {
+            "caption correction count": int(self._to_int(data.get("caption correction count", 0), default=0)) if isinstance(data, dict) else 0,
+            "Duration in minutes": float(self._to_float(data.get("Duration in minutes", 0.0), default=0.0)) if isinstance(data, dict) else 0.0,
+            "accuracy": init_acc,
+        }
 
     def _caption_to_label_index(self, caption: str, label_map: Optional[List[str]]) -> Optional[int]:
         if caption is None or not label_map:
@@ -1576,6 +1740,294 @@ class APTMDL:
                 return labels_lower.index(token)
         return None
 
+    def _extract_case_id_from_path(self, image_path: str, label_map: Optional[List[str]]) -> str:
+        raw = str(image_path or "").strip()
+        if not raw:
+            return ""
+        parts = [p for p in Path(raw).parts if p and p != "."]
+        labels_lower = [str(lbl).strip().lower() for lbl in (label_map or [])]
+        lowered_parts = [str(p).strip().lower() for p in parts]
+        for i, part in enumerate(lowered_parts):
+            if part in labels_lower and i + 1 < len(parts):
+                return str(parts[i + 1])
+        if len(parts) >= 2:
+            return str(parts[-2])
+        return str(parts[-1]) if parts else ""
+
+    def _summarize_class_metrics(
+        self,
+        image_paths: List[str],
+        y_true_labels: List[int],
+        y_pred_labels: List[Optional[int]],
+        label_map: List[str],
+    ) -> Dict[str, Any]:
+        class_totals: Dict[str, int] = {str(lbl): 0 for lbl in label_map}
+        class_correct: Dict[str, int] = {str(lbl): 0 for lbl in label_map}
+        case_ids_by_class: Dict[str, List[str]] = {str(lbl): [] for lbl in label_map}
+        case_ids_correct_by_class: Dict[str, List[str]] = {str(lbl): [] for lbl in label_map}
+
+        for img_path, y_true, y_pred in zip(image_paths, y_true_labels, y_pred_labels):
+            if y_true is None or int(y_true) < 0 or int(y_true) >= len(label_map):
+                continue
+            class_name = str(label_map[int(y_true)])
+            class_totals[class_name] += 1
+            case_id = self._extract_case_id_from_path(str(img_path), label_map)
+            if case_id and case_id not in case_ids_by_class[class_name]:
+                case_ids_by_class[class_name].append(case_id)
+            if y_pred is not None and int(y_pred) == int(y_true):
+                class_correct[class_name] += 1
+                if case_id and case_id not in case_ids_correct_by_class[class_name]:
+                    case_ids_correct_by_class[class_name].append(case_id)
+
+        class_accuracy_pct: Dict[str, float] = {}
+        for class_name in label_map:
+            key = str(class_name)
+            total = int(class_totals.get(key, 0))
+            correct = int(class_correct.get(key, 0))
+            class_accuracy_pct[key] = (100.0 * float(correct) / float(total)) if total > 0 else 0.0
+
+        avg_class_accuracy_pct = (
+            float(sum(class_accuracy_pct.values()) / len(class_accuracy_pct))
+            if class_accuracy_pct
+            else 0.0
+        )
+
+        return {
+            "class_totals": class_totals,
+            "class_correct": class_correct,
+            "case_ids_by_class": case_ids_by_class,
+            "case_ids_correct_by_class": case_ids_correct_by_class,
+            "class_accuracy_pct": class_accuracy_pct,
+            "avg_class_accuracy_pct": float(avg_class_accuracy_pct),
+        }
+
+    def _persist_fold_results(
+        self,
+        round_num: int,
+        validation_metrics: Optional[Dict[str, Any]],
+        active_set_metrics: Optional[Dict[str, Any]],
+        **gen_kwargs,
+    ) -> None:
+        results_root_raw = str(gen_kwargs.get("results_root", "results"))
+        results_root = (
+            results_root_raw
+            if os.path.isabs(results_root_raw)
+            else os.path.join(os.path.dirname(__file__), results_root_raw)
+        )
+        dataset_token = _safe_path_token(gen_kwargs.get("dataset", "dataset"), default="dataset")
+        fold_token = _safe_path_token(self.fold if self.fold is not None else gen_kwargs.get("fold"), default="na")
+        selection_token = _safe_path_token(self.selection_artifact_token, default="mdl")
+        fold_dir = os.path.join(results_root, dataset_token, f"fold-{fold_token}")
+        os.makedirs(fold_dir, exist_ok=True)
+        results_path = os.path.join(fold_dir, f"results_selection={selection_token}.json")
+
+        payload: Dict[str, Any] = {}
+        if os.path.exists(results_path):
+            try:
+                with open(results_path, "r", encoding="utf-8") as f:
+                    payload = json.load(f)
+            except Exception:
+                payload = {}
+
+        now_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        payload.setdefault("dataset", str(gen_kwargs.get("dataset", "dataset")))
+        payload.setdefault("fold", self.fold if self.fold is not None else gen_kwargs.get("fold"))
+        payload.setdefault("selection_method", str(self.selection_method))
+        payload.setdefault("created_at", now_ts)
+        payload["updated_at"] = now_ts
+        rounds = payload.setdefault("rounds", {})
+        rounds[str(int(round_num))] = {
+            "validation": validation_metrics or {},
+            "active_set": active_set_metrics or {},
+        }
+
+        with open(results_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+
+    def _persist_final_test_results(
+        self,
+        test_metrics: Optional[Dict[str, Any]],
+        **gen_kwargs,
+    ) -> None:
+        if test_metrics is None:
+            return
+        results_root_raw = str(gen_kwargs.get("results_root", "results"))
+        results_root = (
+            results_root_raw
+            if os.path.isabs(results_root_raw)
+            else os.path.join(os.path.dirname(__file__), results_root_raw)
+        )
+        dataset_token = _safe_path_token(gen_kwargs.get("dataset", "dataset"), default="dataset")
+        fold_token = _safe_path_token(self.fold if self.fold is not None else gen_kwargs.get("fold"), default="na")
+        selection_token = _safe_path_token(self.selection_artifact_token, default="mdl")
+        fold_dir = os.path.join(results_root, dataset_token, f"fold-{fold_token}")
+        os.makedirs(fold_dir, exist_ok=True)
+        results_path = os.path.join(fold_dir, f"results_selection={selection_token}.json")
+
+        payload: Dict[str, Any] = {}
+        if os.path.exists(results_path):
+            try:
+                with open(results_path, "r", encoding="utf-8") as f:
+                    payload = json.load(f)
+            except Exception:
+                payload = {}
+
+        now_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        payload.setdefault("dataset", str(gen_kwargs.get("dataset", "dataset")))
+        payload.setdefault("fold", self.fold if self.fold is not None else gen_kwargs.get("fold"))
+        payload.setdefault("selection_method", str(self.selection_method))
+        payload.setdefault("created_at", now_ts)
+        payload["updated_at"] = now_ts
+        payload["test"] = test_metrics
+
+        with open(results_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+
+    def _prune_unlabeled_against_prompt_set(
+        self,
+        unlabeled_data: List[LabeledExample],
+    ) -> int:
+        """
+        Remove unlabeled items whose image path already exists in the current prompt_set.
+        Returns number of removed items.
+        """
+        if not unlabeled_data or not self.prompt_set:
+            return 0
+        prompt_paths = {os.path.abspath(str(x)) for x, _ in self.prompt_set}
+        before = len(unlabeled_data)
+        unlabeled_data[:] = [
+            item for item in unlabeled_data
+            if os.path.abspath(str(item[0])) not in prompt_paths
+        ]
+        return int(before - len(unlabeled_data))
+
+    def _to_float(self, value: Any, default: float = 0.0) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return float(default)
+
+    def _to_int(self, value: Any, default: int = 0) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return int(default)
+
+    def _sync_prompt_case_image_dirs(
+        self,
+        fold_dir: str,
+        prompts: List[Dict[str, Any]],
+        label_map: List[str],
+    ) -> None:
+        class_names = [str(lbl) for lbl in (label_map or [])]
+        class_names_lower = {c.lower() for c in class_names}
+
+        # Rebuild class/case image directories from the current global prompt list.
+        for class_name in class_names:
+            class_dir = os.path.join(fold_dir, class_name)
+            if os.path.isdir(class_dir):
+                shutil.rmtree(class_dir)
+
+        for item in prompts:
+            if not isinstance(item, dict):
+                continue
+            src_path = str(item.get("image_path", "")).strip()
+            if not src_path:
+                continue
+            cls_raw = str(item.get("class", "")).strip()
+            class_name = cls_raw if cls_raw.lower() in class_names_lower else ""
+            if not class_name:
+                inferred = self._infer_label_from_path(src_path, class_names)
+                if inferred is None or inferred < 0 or inferred >= len(class_names):
+                    continue
+                class_name = class_names[inferred]
+            case_id = self._extract_case_id_from_path(src_path, class_names)
+            if not case_id:
+                continue
+            dst_case_dir = os.path.join(fold_dir, class_name, str(case_id))
+            os.makedirs(dst_case_dir, exist_ok=True)
+            if not os.path.exists(src_path):
+                continue
+            dst_path = os.path.join(dst_case_dir, os.path.basename(src_path))
+            if not os.path.exists(dst_path):
+                shutil.copy2(src_path, dst_path)
+
+    def _rebuild_global_prompts_file(
+        self,
+        prompts_root: str,
+        dataset_name: str,
+        fold: Optional[int],
+        selection_method: str,
+        label_map: List[str],
+    ) -> Optional[str]:
+        dataset_token = _safe_path_token(dataset_name, default="dataset")
+        fold_token = _safe_path_token(fold, default="na")
+        selection_token = _safe_path_token((selection_method or self.selection_method), default="mdl")
+        fold_dir = os.path.join(prompts_root, dataset_token, f"fold-{fold_token}")
+        os.makedirs(fold_dir, exist_ok=True)
+
+        round_pattern = re.compile(
+            rf"^.*round(\d+)_prompts_{re.escape(selection_token)}_corrected\.json$",
+            flags=re.IGNORECASE,
+        )
+        round_files: List[Tuple[int, str]] = []
+        for name in os.listdir(fold_dir):
+            m = round_pattern.match(name)
+            if not m:
+                continue
+            round_num = self._to_int(m.group(1), default=-1)
+            if round_num < 0:
+                continue
+            round_files.append((round_num, os.path.join(fold_dir, name)))
+
+        round_files.sort(key=lambda x: x[0])
+
+        all_prompts: List[Dict[str, Any]] = [dict(x) for x in (self.initial_prompt_items or [])]
+        total_duration = float(self._to_float(self.initial_global_metrics.get("Duration in minutes", 0.0), default=0.0))
+        total_caption_corrections = int(self._to_int(self.initial_global_metrics.get("caption correction count", 0), default=0))
+        round_accs: List[float] = []
+        init_accuracy = self.initial_global_metrics.get("accuracy")
+
+        for _, path in round_files:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    payload = json.load(f)
+            except Exception:
+                continue
+            if not isinstance(payload, dict):
+                continue
+            round_prompts = payload.get("prompts", [])
+            if isinstance(round_prompts, list):
+                all_prompts.extend(round_prompts)
+            total_duration += self._to_float(payload.get("Duration in minutes", 0.0), default=0.0)
+            total_caption_corrections += self._to_int(payload.get("caption correction count", 0), default=0)
+            if "accuracy" in payload and payload.get("accuracy") not in (None, ""):
+                try:
+                    round_accs.append(float(payload.get("accuracy")))
+                except (TypeError, ValueError):
+                    pass
+
+        global_payload = {
+            "prompts": all_prompts,
+            "caption correction count": int(total_caption_corrections),
+            "Duration in minutes": float(total_duration),
+            "accuracy": float(sum(round_accs) / len(round_accs)) if round_accs else init_accuracy,
+        }
+        global_path = os.path.join(fold_dir, f"global_prompts_{selection_token}_corrected.json")
+        with open(global_path, "w", encoding="utf-8") as f:
+            json.dump(global_payload, f, indent=4)
+
+        try:
+            self._sync_prompt_case_image_dirs(
+                fold_dir=fold_dir,
+                prompts=all_prompts,
+                label_map=list(label_map or []),
+            )
+        except Exception as e:
+            print(f"Warning: failed to sync class/case prompt image directories: {e}")
+
+        return global_path
+
     def _evaluate_validation_subset(
         self,
         val_data: List[LabeledExample],
@@ -1662,52 +2114,58 @@ class APTMDL:
             else:
                 predicted_per_class[str(label_map[int(y_pred)])] += 1
 
-        class_correct: Dict[int, int] = {k: 0 for k in by_class.keys()}
-        class_total: Dict[int, int] = {k: 0 for k in by_class.keys()}
-        for y_true, y_pred in zip(eval_labels, pred_labels):
-            class_total[int(y_true)] = class_total.get(int(y_true), 0) + 1
-            if y_pred is not None and int(y_pred) == int(y_true):
-                class_correct[int(y_true)] = class_correct.get(int(y_true), 0) + 1
-
-        class_accuracy_pct: Dict[str, float] = {}
-        for class_idx in sorted(class_total.keys()):
-            total = class_total.get(class_idx, 0)
-            correct = class_correct.get(class_idx, 0)
-            acc = (100.0 * float(correct) / float(total)) if total > 0 else 0.0
-            class_accuracy_pct[str(label_map[class_idx])] = float(acc)
-
-        avg_class_accuracy_pct = (
-            float(sum(class_accuracy_pct.values()) / len(class_accuracy_pct))
-            if class_accuracy_pct
-            else 0.0
+        class_metrics = self._summarize_class_metrics(
+            image_paths=eval_paths,
+            y_true_labels=[int(y) for y in eval_labels],
+            y_pred_labels=[int(y) if y is not None else None for y in pred_labels],
+            label_map=list(label_map),
         )
 
         val_results_root = str(gen_kwargs.get("val_results_root", "val_results"))
         dataset_token = _safe_path_token(gen_kwargs.get("dataset", "dataset"), default="dataset")
+        selection_token = _safe_path_token(self.selection_artifact_token, default="mdl")
         fold_token = _safe_path_token(self.fold if self.fold is not None else gen_kwargs.get("fold"), default="na")
-        round_token = f"round_{int(round_num):02d}"
-        val_round_dir = os.path.join(val_results_root, dataset_token, f"fold-{fold_token}", round_token)
-        os.makedirs(val_round_dir, exist_ok=True)
-        val_predictions_path = os.path.join(val_round_dir, f"predictions_{self.selection_method}.jsonl")
+        round_token = f"{int(round_num):02d}"
+        val_dir = os.path.join(val_results_root, dataset_token, f"selection_method={selection_token}")
+        os.makedirs(val_dir, exist_ok=True)
+        val_predictions_path = os.path.join(val_dir, f"fold-{fold_token}.json")
 
         try:
+            records: List[Dict[str, Any]] = []
+            for image_path, y_true, pred_pair, y_pred in zip(eval_paths, eval_labels, preds, pred_labels):
+                pred_raw = pred_pair[0] if isinstance(pred_pair, tuple) and len(pred_pair) > 0 else None
+                rationale = pred_pair[1] if isinstance(pred_pair, tuple) and len(pred_pair) > 1 else ""
+                y_true_idx = int(y_true)
+                y_pred_idx = int(y_pred) if y_pred is not None else None
+                records.append({
+                    "round": int(round_num),
+                    "image_path": str(image_path),
+                    "ground_truth_label_idx": y_true_idx,
+                    "ground_truth_label": str(label_map[y_true_idx]) if 0 <= y_true_idx < len(label_map) else None,
+                    "pred_label_raw": pred_raw,
+                    "pred_label_idx": y_pred_idx,
+                    "pred_label": str(label_map[y_pred_idx]) if y_pred_idx is not None and 0 <= y_pred_idx < len(label_map) else None,
+                    "caption": "" if rationale is None else str(rationale),
+                    "is_correct": bool(y_pred_idx == y_true_idx) if y_pred_idx is not None else False,
+                })
+
+            val_payload: Dict[str, Any] = {}
+            if os.path.exists(val_predictions_path):
+                try:
+                    with open(val_predictions_path, "r", encoding="utf-8") as f:
+                        existing = json.load(f)
+                    if isinstance(existing, dict):
+                        val_payload = existing
+                except Exception:
+                    val_payload = {}
+            val_payload.setdefault("dataset", str(gen_kwargs.get("dataset", "dataset")))
+            val_payload.setdefault("fold", fold_token)
+            val_payload.setdefault("selection_method", selection_token)
+            val_payload.setdefault("split", "validation")
+            val_payload.setdefault("round_predictions", {})
+            val_payload["round_predictions"][f"round_{round_token}"] = records
             with open(val_predictions_path, "w", encoding="utf-8") as f:
-                for image_path, y_true, pred_pair, y_pred in zip(eval_paths, eval_labels, preds, pred_labels):
-                    pred_raw = pred_pair[0] if isinstance(pred_pair, tuple) and len(pred_pair) > 0 else None
-                    rationale = pred_pair[1] if isinstance(pred_pair, tuple) and len(pred_pair) > 1 else ""
-                    y_true_idx = int(y_true)
-                    y_pred_idx = int(y_pred) if y_pred is not None else None
-                    record = {
-                        "image_path": str(image_path),
-                        "ground_truth_label_idx": y_true_idx,
-                        "ground_truth_label": str(label_map[y_true_idx]) if 0 <= y_true_idx < len(label_map) else None,
-                        "pred_label_raw": pred_raw,
-                        "pred_label_idx": y_pred_idx,
-                        "pred_label": str(label_map[y_pred_idx]) if y_pred_idx is not None and 0 <= y_pred_idx < len(label_map) else None,
-                        "caption": "" if rationale is None else str(rationale),
-                        "is_correct": bool(y_pred_idx == y_true_idx) if y_pred_idx is not None else False,
-                    }
-                    f.write(json.dumps(record) + "\n")
+                json.dump(val_payload, f, indent=2)
         except Exception as e:
             print(f"Warning: failed to write validation predictions file: {e}")
             val_predictions_path = ""
@@ -1717,9 +2175,160 @@ class APTMDL:
             "validation_subset_size": int(len(eval_paths)),
             "sampled_per_class": sampled_per_class,
             "predicted_per_class": predicted_per_class,
-            "class_accuracy_pct": class_accuracy_pct,
-            "avg_class_accuracy_pct": float(avg_class_accuracy_pct),
+            "class_totals": class_metrics["class_totals"],
+            "class_correct": class_metrics["class_correct"],
+            "case_ids_by_class": class_metrics["case_ids_by_class"],
+            "case_ids_correct_by_class": class_metrics["case_ids_correct_by_class"],
+            "class_accuracy_pct": class_metrics["class_accuracy_pct"],
+            "avg_class_accuracy_pct": class_metrics["avg_class_accuracy_pct"],
             "val_predictions_path": val_predictions_path,
+        }
+
+    def _evaluate_test_subset(
+        self,
+        test_data: List[LabeledExample],
+        round_num: int,
+        label_map: Optional[List[str]],
+        **gen_kwargs,
+    ) -> Optional[Dict[str, Any]]:
+        if not test_data:
+            return None
+        if not label_map:
+            print("Test evaluation skipped: label_map is required.")
+            return None
+
+        by_class: Dict[int, List[str]] = {}
+        for item in test_data:
+            image_path = str(item[0])
+            y_true = None
+            if len(item) > 1 and isinstance(item[1], Integral):
+                y_idx = int(item[1])
+                if 0 <= y_idx < len(label_map):
+                    y_true = y_idx
+            if y_true is None:
+                y_true = self._infer_label_from_path(image_path, label_map)
+            if y_true is None:
+                continue
+            by_class.setdefault(int(y_true), []).append(image_path)
+
+        if not by_class:
+            print("Test evaluation skipped: no class labels inferred from image paths.")
+            return None
+
+        eval_paths: List[str] = []
+        eval_labels: List[int] = []
+        sampled_per_class: Dict[str, int] = {}
+        for class_idx in sorted(by_class.keys()):
+            picked = list(by_class[class_idx])
+            eval_paths.extend(picked)
+            eval_labels.extend([class_idx] * len(picked))
+            sampled_per_class[str(label_map[class_idx])] = int(len(picked))
+
+        if not eval_paths:
+            return None
+
+        query_batch_size = max(1, int(gen_kwargs.get("vlm_query_batch_size", 5)))
+        eval_gen_kwargs = dict(gen_kwargs)
+        eval_gen_kwargs["label_map"] = list(label_map)
+        preds: List[Tuple[Label, Caption]] = []
+        num_batches = (len(eval_paths) + query_batch_size - 1) // query_batch_size
+        for i in tqdm(
+            range(0, len(eval_paths), query_batch_size),
+            total=num_batches,
+            desc=f"Test r{int(round_num)}",
+            leave=False,
+        ):
+            batch_paths = eval_paths[i:i + query_batch_size]
+            batch_preds = vlm_query(
+                batch_paths,
+                self.S_1,
+                self.S_2_template,
+                self.prompt_set,
+                stochastic=False,
+                **eval_gen_kwargs,
+            )
+            if isinstance(batch_preds, list):
+                preds.extend(batch_preds)
+            else:
+                preds.append(batch_preds)
+
+        if len(preds) != len(eval_paths):
+            print(
+                f"Test evaluation skipped: prediction count mismatch "
+                f"({len(preds)} vs {len(eval_paths)})."
+            )
+            return None
+
+        pred_labels = [self._normalize_prediction_label(p[0], label_map) for p in preds]
+        predicted_per_class: Dict[str, int] = {str(lbl): 0 for lbl in label_map}
+        predicted_per_class["unknown"] = 0
+        for y_pred in pred_labels:
+            if y_pred is None or int(y_pred) < 0 or int(y_pred) >= len(label_map):
+                predicted_per_class["unknown"] += 1
+            else:
+                predicted_per_class[str(label_map[int(y_pred)])] += 1
+
+        class_metrics = self._summarize_class_metrics(
+            image_paths=eval_paths,
+            y_true_labels=[int(y) for y in eval_labels],
+            y_pred_labels=[int(y) if y is not None else None for y in pred_labels],
+            label_map=list(label_map),
+        )
+
+        test_results_root = str(gen_kwargs.get("test_results_root", "test_results"))
+        dataset_token = _safe_path_token(gen_kwargs.get("dataset", "dataset"), default="dataset")
+        selection_token = _safe_path_token(self.selection_artifact_token, default="mdl")
+        fold_token = _safe_path_token(self.fold if self.fold is not None else gen_kwargs.get("fold"), default="na")
+        round_token = f"{int(round_num):02d}"
+        test_dir = os.path.join(test_results_root, dataset_token, f"selection_method={selection_token}")
+        os.makedirs(test_dir, exist_ok=True)
+        test_predictions_path = os.path.join(test_dir, f"fold-{fold_token}.json")
+
+        try:
+            records: List[Dict[str, Any]] = []
+            for image_path, y_true, pred_pair, y_pred in zip(eval_paths, eval_labels, preds, pred_labels):
+                pred_raw = pred_pair[0] if isinstance(pred_pair, tuple) and len(pred_pair) > 0 else None
+                rationale = pred_pair[1] if isinstance(pred_pair, tuple) and len(pred_pair) > 1 else ""
+                y_true_idx = int(y_true)
+                y_pred_idx = int(y_pred) if y_pred is not None else None
+                records.append({
+                    "round": int(round_num),
+                    "image_path": str(image_path),
+                    "ground_truth_label_idx": y_true_idx,
+                    "ground_truth_label": str(label_map[y_true_idx]) if 0 <= y_true_idx < len(label_map) else None,
+                    "pred_label_raw": pred_raw,
+                    "pred_label_idx": y_pred_idx,
+                    "pred_label": str(label_map[y_pred_idx]) if y_pred_idx is not None and 0 <= y_pred_idx < len(label_map) else None,
+                    "caption": "" if rationale is None else str(rationale),
+                    "is_correct": bool(y_pred_idx == y_true_idx) if y_pred_idx is not None else False,
+                })
+
+            test_payload = {
+                "dataset": str(gen_kwargs.get("dataset", "dataset")),
+                "fold": fold_token,
+                "selection_method": selection_token,
+                "split": "test",
+                "round": int(round_num),
+                "predictions": records,
+            }
+            with open(test_predictions_path, "w", encoding="utf-8") as f:
+                json.dump(test_payload, f, indent=2)
+        except Exception as e:
+            print(f"Warning: failed to write test predictions file: {e}")
+            test_predictions_path = ""
+
+        return {
+            "round": int(round_num),
+            "test_subset_size": int(len(eval_paths)),
+            "sampled_per_class": sampled_per_class,
+            "predicted_per_class": predicted_per_class,
+            "class_totals": class_metrics["class_totals"],
+            "class_correct": class_metrics["class_correct"],
+            "case_ids_by_class": class_metrics["case_ids_by_class"],
+            "case_ids_correct_by_class": class_metrics["case_ids_correct_by_class"],
+            "class_accuracy_pct": class_metrics["class_accuracy_pct"],
+            "avg_class_accuracy_pct": class_metrics["avg_class_accuracy_pct"],
+            "test_predictions_path": test_predictions_path,
         }
 
     # -------------------------------------------------------
@@ -1729,6 +2338,7 @@ class APTMDL:
         self,
         unlabeled_data: List[LabeledExample],
         val_data: List[LabeledExample],
+        test_data: Optional[List[LabeledExample]] = None,
         **gen_kwargs
     ) -> PromptSet:
     
@@ -1736,8 +2346,11 @@ class APTMDL:
         resume = gen_kwargs.get("resume", False)
         checkpoint_path = with_selection_suffix(
             gen_kwargs.get("checkpoint_path", "checkpoint.json"),
-            self.selection_method
+            self.selection_artifact_token
         )
+
+        # Keep a single mutable pool reference used by selection/removal/checkpointing.
+        self.unlabeled_data = unlabeled_data
         
         start_round = 1
         
@@ -1745,6 +2358,8 @@ class APTMDL:
             if os.path.exists(checkpoint_path):
                 try:
                     last_round, last_accuracy = self.load_checkpoint(checkpoint_path)
+                    # On resume, checkpoint state is the source of truth for pool state.
+                    unlabeled_data = self.unlabeled_data
                     start_round = last_round + 1
                     if last_accuracy is not None:
                         print(f"Last saved validation avg-class accuracy: {last_accuracy:.1f}%")
@@ -1757,6 +2372,27 @@ class APTMDL:
             else:
                 print(f"Checkpoint {checkpoint_path} not found. Starting from scratch.")
 
+        removed_already_labeled = self._prune_unlabeled_against_prompt_set(unlabeled_data)
+        self.unlabeled_data = unlabeled_data
+        if removed_already_labeled > 0:
+            print(
+                f"Pruned {removed_already_labeled} items from unlabeled pool "
+                "because they are already in prompt_set."
+            )
+        try:
+            bootstrap_global = self._rebuild_global_prompts_file(
+                prompts_root=str(gen_kwargs.get("prompts_root", "prompt_sets")),
+                dataset_name=str(gen_kwargs.get("dataset", "dataset")),
+                fold=self.fold if self.fold is not None else gen_kwargs.get("fold"),
+                selection_method=self.selection_method,
+                label_map=list(gen_kwargs.get("label_map") or []),
+            )
+            if bootstrap_global:
+                print(f"Initialized/updated global prompts file: {bootstrap_global}")
+        except Exception as e:
+            print(f"Warning: failed to initialize global prompts from seed prompts: {e}")
+        last_completed_round = max(0, int(start_round) - 1)
+
         dts_tuner = None
         dts_diagnostics_path = None
         if self.selection_method == "dts":
@@ -1768,6 +2404,7 @@ class APTMDL:
                 base_outdir=self.diagnostic_outdir,
                 dataset_name=dataset_name,
                 fold=fold_for_run,
+                selection_token=self.selection_artifact_token,
             )
             os.makedirs(dts_run_outdir, exist_ok=True)
             dts_diagnostics_path = os.path.join(dts_run_outdir, "diagnostics.jsonl")
@@ -1781,6 +2418,7 @@ class APTMDL:
                 diagnostic_every=self.diagnostic_every,
                 diagnostic_seed=self.diagnostic_seed,
                 max_images_per_panel=self.max_images_per_panel,
+                clip_model_name=self.dts_clip_model_name,
                 clip_batch_size=self.clip_batch_size,
                 use_mutual_knn=self.dts_mutual_knn,
             )
@@ -1813,11 +2451,14 @@ class APTMDL:
                 os.makedirs(self.logs_dir, exist_ok=True)
                 
             if self.fold is not None:
-                intra_round_log_name = f"round_{r}_fold={self.fold}_selection={self.selection_method}_log.jsonl"
+                intra_round_log_name = f"round_{r}_fold={self.fold}_selection={self.selection_artifact_token}_log.jsonl"
             else:
-                intra_round_log_name = f"round_{r}_selection={self.selection_method}_log.jsonl"
+                intra_round_log_name = f"round_{r}_selection={self.selection_artifact_token}_log.jsonl"
             intra_round_log_path = os.path.join(self.logs_dir, intra_round_log_name)
-            intra_round_embed_cache_path = intra_round_log_path.replace("_log.jsonl", "_clip_embeddings.npz")
+            intra_round_embed_cache_path = intra_round_log_path.replace(
+                "_log.jsonl",
+                f"_{_safe_path_token(self.selection_artifact_token, default='dts')}_embeddings.npz",
+            )
 
             # Backward-compatible resume: adopt known legacy intra-round naming patterns.
             if not os.path.exists(intra_round_log_path):
@@ -1927,7 +2568,7 @@ class APTMDL:
                     k_b=self.dts_k_b,
                     use_mutual_knn=self.dts_mutual_knn,
                     mcluster_min=self.dts_mcluster_min,
-                    clip_model_name="openai/clip-vit-base-patch32",
+                    clip_model_name=self.dts_clip_model_name,
                     clip_batch_size=self.clip_batch_size,
                     embedding_cache_path=intra_round_embed_cache_path,
                 )
@@ -2017,11 +2658,6 @@ class APTMDL:
                         continue
                     ranked_candidates.append((idx, float(score), item))
 
-                # Deterministic tie-break: score desc, then index asc.
-                ranked_candidates.sort(key=lambda t: (-float(t[1]), int(t[0])))
-                ranked_idx = [int(idx) for idx, _, _ in ranked_candidates]
-                score_by_idx = {int(idx): float(score) for idx, score, _ in ranked_candidates}
-
                 mcluster_min = int(self.dts_mcluster_min)
                 base_cap = int(self.dts_max_per_basin)
                 deg_min_tiny = int(self.dts_deg_min_tiny)
@@ -2033,6 +2669,24 @@ class APTMDL:
                     np.asarray(dts_outlier_flags, dtype=bool)
                     if dts_outlier_flags.size == len(cluster_sizes_eff)
                     else np.zeros(len(cluster_sizes_eff), dtype=bool)
+                )
+
+                score_by_idx = {int(idx): float(score) for idx, score, _ in ranked_candidates}
+
+                def _candidate_sort_key(idx: int) -> Tuple[float, int, int, float, int]:
+                    # Deterministic ordering:
+                    # 1) bscore desc, 2) basin size asc, 3) deg_mut desc, 4) d1(first-NN distance) desc, 5) index asc.
+                    return (
+                        -float(score_by_idx.get(int(idx), 0.0)),
+                        int(cluster_sizes_eff[int(idx)]),
+                        -int(deg_mut[int(idx)]),
+                        -float(first_nn_distance[int(idx)]) if int(idx) < len(first_nn_distance) else 0.0,
+                        int(idx),
+                    )
+
+                ranked_idx = sorted(
+                    [int(idx) for idx, _, _ in ranked_candidates],
+                    key=_candidate_sort_key,
                 )
 
                 selected_idx_set = set()
@@ -2099,181 +2753,401 @@ class APTMDL:
                     _add_selected(int(idx))
                     return True
 
-                def _pick_diverse_big_non_outliers(num_needed: int) -> List[int]:
-                    if num_needed <= 0:
-                        return []
-                    candidates = [
-                        int(idx)
-                        for idx in ranked_idx
-                        if idx not in selected_idx_set and bool(big_mask[idx]) and not bool(outlier_mask[idx])
-                    ]
-                    if not candidates:
-                        return []
-                    if embeddings is None:
-                        return candidates[:num_needed]
-                    z = np.asarray(embeddings, dtype=np.float32)
-                    if z.ndim != 2 or z.shape[0] != len(cluster_sizes_eff):
-                        return candidates[:num_needed]
+                def _pick_stage_round_robin(
+                    candidate_pool: List[int],
+                    *,
+                    allow_tiny: bool,
+                    allow_outliers: bool,
+                    enforce_cap: bool,
+                    cap_value: int,
+                    require_tiny_thresholds: bool,
+                    target_add: int,
+                    skip_capped_basins_fast: bool = False,
+                ) -> int:
+                    if target_add <= 0:
+                        return 0
 
-                    cand_arr = np.asarray(candidates, dtype=np.int32)
-                    cand_z = z[cand_arr]
-                    cand_norm = cand_z / np.clip(np.linalg.norm(cand_z, axis=1, keepdims=True), 1e-12, None)
+                    pool = [int(idx) for idx in candidate_pool if int(idx) not in selected_idx_set]
+                    if not pool:
+                        return 0
 
-                    chosen: List[int] = []
-                    if selected_idx_set:
-                        sel_arr = np.asarray(sorted(selected_idx_set), dtype=np.int32)
-                        sel_z = z[sel_arr]
-                        sel_norm = sel_z / np.clip(np.linalg.norm(sel_z, axis=1, keepdims=True), 1e-12, None)
-                        max_sim = np.max(cand_norm @ sel_norm.T, axis=1)
-                    else:
-                        max_sim = np.full(cand_arr.shape[0], np.inf, dtype=np.float32)
+                    # 1) Group by basin.
+                    basin_to_candidates: Dict[int, List[int]] = {}
+                    for idx in pool:
+                        basin_id = int(roots_eff[idx])
+                        basin_to_candidates.setdefault(basin_id, []).append(int(idx))
 
-                    while len(chosen) < num_needed and cand_arr.size > 0:
-                        if selected_idx_set or chosen:
-                            best_pos = min(
-                                range(cand_arr.shape[0]),
-                                key=lambda pos: (
-                                    float(max_sim[pos]),
-                                    -float(score_by_idx.get(int(cand_arr[pos]), 0.0)),
-                                    int(cand_arr[pos]),
-                                ),
-                            )
-                        else:
-                            best_pos = min(
-                                range(cand_arr.shape[0]),
-                                key=lambda pos: (
-                                    -float(score_by_idx.get(int(cand_arr[pos]), 0.0)),
-                                    int(cand_arr[pos]),
-                                ),
-                            )
-                        chosen_idx = int(cand_arr[best_pos])
-                        chosen.append(chosen_idx)
+                    # 2) Sort candidates per basin by deterministic candidate key.
+                    for basin_id, basin_candidates in basin_to_candidates.items():
+                        basin_candidates.sort(key=_candidate_sort_key)
+                        basin_to_candidates[basin_id] = basin_candidates
 
-                        chosen_vec = cand_norm[best_pos:best_pos + 1, :]
-                        sim_to_new = np.sum(cand_norm * chosen_vec, axis=1)
-                        max_sim = np.minimum(max_sim, sim_to_new)
-
-                        keep = np.ones(cand_arr.shape[0], dtype=bool)
-                        keep[best_pos] = False
-                        cand_arr = cand_arr[keep]
-                        cand_norm = cand_norm[keep]
-                        max_sim = max_sim[keep]
-
-                    return chosen
-
-                # Primary selection (Fix B): big basins only, non-outliers, with per-basin cap.
-                for idx in ranked_idx:
-                    if len(dts_selected_indices) >= num_to_select:
-                        break
-                    _try_select_idx(
-                        idx,
-                        allow_tiny=False,
-                        allow_outliers=False,
-                        enforce_cap=True,
-                        cap_value=base_cap,
-                        require_tiny_thresholds=False,
+                    # 3) Sort basin order by best-candidate bscore desc, basin_size asc, basin_id asc.
+                    basin_order = sorted(
+                        basin_to_candidates.keys(),
+                        key=lambda basin_id: (
+                            -float(score_by_idx.get(int(basin_to_candidates[basin_id][0]), 0.0)),
+                            int(cluster_sizes_eff[int(basin_to_candidates[basin_id][0])]),
+                            int(basin_id),
+                        ),
                     )
 
-                underfilled_before_fill = max(0, int(num_to_select - len(dts_selected_indices)))
-
-                # Fix C1: relax cap for big basins only.
-                cap_relaxed_to = int(base_cap)
-                if len(dts_selected_indices) < num_to_select:
-                    relaxed_cap = int(base_cap)
-                    while len(dts_selected_indices) < num_to_select:
-                        relaxed_cap += 1
-                        added_this_cap = 0
-                        for idx in ranked_idx:
-                            if len(dts_selected_indices) >= num_to_select:
+                    added = 0
+                    active_basins = list(basin_order)
+                    # 4) Round-robin over basins, picking top remaining from each basin.
+                    while added < target_add and active_basins:
+                        progressed = False
+                        next_active_basins: List[int] = []
+                        for basin_id in active_basins:
+                            if added >= target_add:
                                 break
-                            if not bool(big_mask[idx]):
+                            if skip_capped_basins_fast and enforce_cap:
+                                if int(basin_counts.get(int(basin_id), 0)) >= int(cap_value):
+                                    continue
+                            basin_candidates = basin_to_candidates.get(int(basin_id), [])
+                            while basin_candidates:
+                                if skip_capped_basins_fast and enforce_cap:
+                                    if int(basin_counts.get(int(basin_id), 0)) >= int(cap_value):
+                                        break
+                                idx = int(basin_candidates.pop(0))
+                                if _try_select_idx(
+                                    idx,
+                                    allow_tiny=allow_tiny,
+                                    allow_outliers=allow_outliers,
+                                    enforce_cap=enforce_cap,
+                                    cap_value=cap_value,
+                                    require_tiny_thresholds=require_tiny_thresholds,
+                                ):
+                                    added += 1
+                                    progressed = True
+                                    break
+                            if basin_candidates:
+                                if not (skip_capped_basins_fast and enforce_cap and int(basin_counts.get(int(basin_id), 0)) >= int(cap_value)):
+                                    next_active_basins.append(int(basin_id))
+                        active_basins = next_active_basins
+                        if not progressed:
+                            break
+                    return int(added)
+
+                def _format_candidate_row(idx: int) -> Dict[str, Any]:
+                    return {
+                        "index": int(idx),
+                        "basin_id": int(roots_eff[idx]),
+                        "basin_size": int(cluster_sizes_eff[idx]),
+                        "bscore": float(score_by_idx.get(int(idx), 0.0)),
+                        "deg_mut": int(deg_mut[idx]),
+                        "d1": float(first_nn_distance[idx]) if idx < len(first_nn_distance) else None,
+                        "outlier_flag": bool(outlier_mask[idx]) if idx < len(outlier_mask) else False,
+                    }
+
+                preview_idx = ranked_idx[:10]
+                print(
+                    "DTS top candidates (pre-selection): "
+                    f"{json.dumps([_format_candidate_row(int(idx)) for idx in preview_idx])}"
+                )
+
+                def _build_stage_ranked_list(
+                    candidate_pool: List[int],
+                    *,
+                    enforce_cap: bool,
+                    cap_value: int,
+                    require_tiny_thresholds: bool,
+                    skip_capped_basins_fast: bool = False,
+                    initial_selected: Optional[set] = None,
+                    initial_basin_counts: Optional[Dict[int, int]] = None,
+                ) -> Tuple[List[int], set, Dict[int, int]]:
+                    local_selected = set(initial_selected or set())
+                    local_basin_counts = dict(initial_basin_counts or {})
+                    pool = [int(idx) for idx in candidate_pool if int(idx) not in local_selected]
+                    if not pool:
+                        return [], local_selected, local_basin_counts
+
+                    basin_to_candidates: Dict[int, List[int]] = {}
+                    for idx in pool:
+                        basin_id = int(roots_eff[idx])
+                        basin_to_candidates.setdefault(basin_id, []).append(int(idx))
+                    for basin_id in basin_to_candidates.keys():
+                        basin_to_candidates[basin_id].sort(key=_candidate_sort_key)
+
+                    basin_order = sorted(
+                        basin_to_candidates.keys(),
+                        key=lambda basin_id: (
+                            -float(score_by_idx.get(int(basin_to_candidates[basin_id][0]), 0.0)),
+                            int(cluster_sizes_eff[int(basin_to_candidates[basin_id][0])]),
+                            int(basin_id),
+                        ),
+                    )
+                    active_basins = list(basin_order)
+                    ranked: List[int] = []
+                    while active_basins:
+                        progressed = False
+                        next_active_basins: List[int] = []
+                        for basin_id in active_basins:
+                            if skip_capped_basins_fast and enforce_cap:
+                                if int(local_basin_counts.get(int(basin_id), 0)) >= int(cap_value):
+                                    continue
+                            basin_candidates = basin_to_candidates.get(int(basin_id), [])
+                            while basin_candidates:
+                                if skip_capped_basins_fast and enforce_cap:
+                                    if int(local_basin_counts.get(int(basin_id), 0)) >= int(cap_value):
+                                        break
+                                idx = int(basin_candidates.pop(0))
+                                if idx in local_selected:
+                                    continue
+                                if require_tiny_thresholds:
+                                    if int(deg_mut[idx]) < deg_min_tiny:
+                                        continue
+                                    if float(score_by_idx.get(int(idx), 0.0)) < b_min_tiny:
+                                        continue
+                                if enforce_cap and int(local_basin_counts.get(int(basin_id), 0)) >= int(cap_value):
+                                    continue
+                                ranked.append(int(idx))
+                                local_selected.add(int(idx))
+                                local_basin_counts[int(basin_id)] = int(local_basin_counts.get(int(basin_id), 0)) + 1
+                                progressed = True
+                                break
+                            if basin_candidates:
+                                if not (skip_capped_basins_fast and enforce_cap and int(local_basin_counts.get(int(basin_id), 0)) >= int(cap_value)):
+                                    next_active_basins.append(int(basin_id))
+                        active_basins = next_active_basins
+                        if not progressed:
+                            break
+                    return ranked, local_selected, local_basin_counts
+
+                # Build deterministic ranked list per stage.
+                DELTA_B = 0.10
+                stage1_candidates = [int(idx) for idx in ranked_idx if bool(big_mask[idx]) and not bool(outlier_mask[idx])]
+                stage1_bmax = float("nan")
+                stage1_b_floor = float("nan")
+                stage1_hi_pool: List[int] = []
+                if stage1_candidates:
+                    stage1_bmax = float(max(float(score_by_idx.get(int(idx), 0.0)) for idx in stage1_candidates))
+                    stage1_b_floor = float(stage1_bmax - DELTA_B)
+                    if bool(np.isfinite(stage1_bmax)):
+                        stage1_hi_pool = [
+                            int(idx)
+                            for idx in stage1_candidates
+                            if float(score_by_idx.get(int(idx), 0.0)) >= stage1_b_floor
+                        ]
+                stage1_hi_ranked, _, _ = _build_stage_ranked_list(
+                    stage1_hi_pool,
+                    enforce_cap=True,
+                    cap_value=base_cap,
+                    require_tiny_thresholds=False,
+                    skip_capped_basins_fast=True,
+                )
+                stage1_rest_pool = [int(idx) for idx in stage1_candidates if int(idx) not in set(stage1_hi_ranked)]
+                stage1_rest_ranked, _, _ = _build_stage_ranked_list(
+                    stage1_rest_pool,
+                    enforce_cap=True,
+                    cap_value=base_cap,
+                    require_tiny_thresholds=False,
+                    skip_capped_basins_fast=True,
+                )
+                stage1_ranked = [int(idx) for idx in stage1_hi_ranked] + [int(idx) for idx in stage1_rest_ranked]
+                stage1_hi_set = set(stage1_hi_ranked)
+
+                relax_pool = [int(idx) for idx in ranked_idx if bool(big_mask[idx]) and not bool(outlier_mask[idx])]
+                relax_ranked: List[int] = []
+                relax_selected_local: set = set()
+                relax_basin_counts_local: Dict[int, int] = {}
+                cap_relaxed_to = int(base_cap)
+                relaxed_cap = int(base_cap)
+                while True:
+                    relaxed_cap += 1
+                    added_ranked, relax_selected_local, relax_basin_counts_local = _build_stage_ranked_list(
+                        relax_pool,
+                        enforce_cap=True,
+                        cap_value=int(relaxed_cap),
+                        require_tiny_thresholds=False,
+                        skip_capped_basins_fast=True,
+                        initial_selected=relax_selected_local,
+                        initial_basin_counts=relax_basin_counts_local,
+                    )
+                    if not added_ranked:
+                        break
+                    relax_ranked.extend(int(idx) for idx in added_ranked)
+                    cap_relaxed_to = int(relaxed_cap)
+
+                diversity_pool = [int(idx) for idx in ranked_idx if bool(big_mask[idx]) and not bool(outlier_mask[idx])]
+                diversity_ranked, _, _ = _build_stage_ranked_list(
+                    diversity_pool,
+                    enforce_cap=False,
+                    cap_value=base_cap,
+                    require_tiny_thresholds=False,
+                    skip_capped_basins_fast=False,
+                )
+
+                tiny_pool = [int(idx) for idx in ranked_idx if bool(tiny_mask[idx]) and not bool(outlier_mask[idx])]
+                tiny_ranked, _, _ = _build_stage_ranked_list(
+                    tiny_pool,
+                    enforce_cap=True,
+                    cap_value=base_cap,
+                    require_tiny_thresholds=True,
+                    skip_capped_basins_fast=True,
+                )
+
+                outlier_big_pool = [int(idx) for idx in ranked_idx if bool(big_mask[idx]) and bool(outlier_mask[idx])]
+                outlier_big_ranked, _, _ = _build_stage_ranked_list(
+                    outlier_big_pool,
+                    enforce_cap=False,
+                    cap_value=base_cap,
+                    require_tiny_thresholds=False,
+                    skip_capped_basins_fast=False,
+                )
+                outlier_tiny_pool = [int(idx) for idx in ranked_idx if bool(tiny_mask[idx]) and bool(outlier_mask[idx])]
+                outlier_tiny_ranked, _, _ = _build_stage_ranked_list(
+                    outlier_tiny_pool,
+                    enforce_cap=False,
+                    cap_value=base_cap,
+                    require_tiny_thresholds=False,
+                    skip_capped_basins_fast=False,
+                )
+                outlier_ranked = [int(idx) for idx in outlier_big_ranked] + [int(idx) for idx in outlier_tiny_ranked]
+
+                stage_specs: List[Dict[str, Any]] = [
+                    {
+                        "name": "stage1",
+                        "priority": 0,
+                        "order": 0,
+                        "pool_size": int(len(stage1_candidates)),
+                        "ranked": [int(idx) for idx in stage1_ranked],
+                    },
+                    {
+                        "name": "relax_cap_big",
+                        "priority": 1,
+                        "order": 1,
+                        "pool_size": int(len(relax_pool)),
+                        "ranked": [int(idx) for idx in relax_ranked],
+                    },
+                    {
+                        "name": "fallback_diversity_big",
+                        "priority": 2,
+                        "order": 2,
+                        "pool_size": int(len(diversity_pool)),
+                        "ranked": [int(idx) for idx in diversity_ranked],
+                    },
+                    {
+                        "name": "fallback_tiny",
+                        "priority": 3,
+                        "order": 3,
+                        "pool_size": int(len(tiny_pool)),
+                        "ranked": [int(idx) for idx in tiny_ranked],
+                    },
+                    {
+                        "name": "last_resort_outlier",
+                        "priority": 4,
+                        "order": 4,
+                        "pool_size": int(len(outlier_big_pool) + len(outlier_tiny_pool)),
+                        "ranked": [int(idx) for idx in outlier_ranked],
+                    },
+                ]
+
+                for stage in stage_specs:
+                    top5 = [_format_candidate_row(int(idx)) for idx in stage["ranked"][:5]]
+                    print(
+                        "DTS stage ranked list: "
+                        f"{json.dumps({'stage_name': stage['name'], 'pool_size': int(stage['pool_size']), 'ranked_list_size': int(len(stage['ranked'])), 'top5': top5})}"
+                    )
+
+                # Global stage-aware selection loop with deterministic cross-stage priority.
+                stage_cursor = {str(stage["name"]): 0 for stage in stage_specs}
+                selected_count_by_stage = {str(stage["name"]): 0 for stage in stage_specs}
+                per_basin_cap_rejections_by_stage = {str(stage["name"]): 0 for stage in stage_specs}
+                per_basin_cap_rejections_stage1_hi = 0
+                per_basin_cap_rejections_stage1_rest = 0
+                global_selection_trace: List[Dict[str, Any]] = []
+
+                while len(dts_selected_indices) < num_to_select:
+                    stage_heads: List[Tuple[int, Dict[str, Any], int]] = []
+                    for stage in stage_specs:
+                        stage_name = str(stage["name"])
+                        ranked_list = stage["ranked"]
+                        ptr = int(stage_cursor[stage_name])
+                        while ptr < len(ranked_list):
+                            idx = int(ranked_list[ptr])
+                            if idx in selected_idx_set:
+                                ptr += 1
                                 continue
-                            if _try_select_idx(
-                                idx,
-                                allow_tiny=False,
-                                allow_outliers=False,
-                                enforce_cap=True,
-                                cap_value=relaxed_cap,
-                                require_tiny_thresholds=False,
-                            ):
-                                added_this_cap += 1
-                        if added_this_cap == 0:
+                            basin_id = int(roots_eff[idx])
+                            if int(basin_counts.get(basin_id, 0)) >= int(base_cap):
+                                rejection_reason_counts["per_basin_cap"] += 1
+                                per_basin_cap_rejections_by_stage[stage_name] = int(per_basin_cap_rejections_by_stage.get(stage_name, 0)) + 1
+                                if stage_name == "stage1":
+                                    if int(idx) in stage1_hi_set:
+                                        per_basin_cap_rejections_stage1_hi += 1
+                                    else:
+                                        per_basin_cap_rejections_stage1_rest += 1
+                                ptr += 1
+                                continue
                             break
-                        fill_strategy_counts["relax_cap_big"] += int(added_this_cap)
-                        cap_relaxed_to = int(relaxed_cap)
+                        stage_cursor[stage_name] = int(ptr)
+                        if ptr < len(ranked_list):
+                            stage_heads.append((int(idx), stage, int(ptr)))
 
-                # Fix C2: diversity fallback from big basins (non-outlier), cap-free.
-                if len(dts_selected_indices) < num_to_select:
-                    needed = int(num_to_select - len(dts_selected_indices))
-                    diverse_fill = _pick_diverse_big_non_outliers(needed)
-                    added_diverse = 0
-                    for idx in diverse_fill:
-                        if len(dts_selected_indices) >= num_to_select:
-                            break
-                        if _try_select_idx(
-                            int(idx),
-                            allow_tiny=False,
-                            allow_outliers=False,
-                            enforce_cap=False,
-                            cap_value=base_cap,
-                            require_tiny_thresholds=False,
-                        ):
-                            added_diverse += 1
-                    fill_strategy_counts["fallback_diversity_big"] += int(added_diverse)
+                    if not stage_heads:
+                        break
 
-                # Fix C3: tiny fallback with strict gating, non-outlier, cap enforced.
-                if len(dts_selected_indices) < num_to_select:
-                    added_tiny = 0
-                    for idx in ranked_idx:
-                        if len(dts_selected_indices) >= num_to_select:
-                            break
-                        if not bool(tiny_mask[idx]):
-                            continue
-                        if _try_select_idx(
-                            idx,
-                            allow_tiny=True,
-                            allow_outliers=False,
-                            enforce_cap=True,
-                            cap_value=base_cap,
-                            require_tiny_thresholds=True,
-                        ):
-                            added_tiny += 1
-                    fill_strategy_counts["fallback_tiny"] += int(added_tiny)
+                    chosen_idx, chosen_stage, chosen_ptr = sorted(
+                        stage_heads,
+                        key=lambda head: (
+                            -float(score_by_idx.get(int(head[0]), 0.0)),
+                            int(head[1]["priority"]),
+                            int(cluster_sizes_eff[int(head[0])]),
+                            -int(deg_mut[int(head[0])]),
+                            -float(first_nn_distance[int(head[0])]) if int(head[0]) < len(first_nn_distance) else 0.0,
+                            int(head[0]),
+                            int(head[1]["order"]),
+                        ),
+                    )[0]
 
-                # Fix C4: absolute last resort, allow outliers from big basins then tiny basins.
-                if len(dts_selected_indices) < num_to_select:
-                    for idx in ranked_idx:
-                        if len(dts_selected_indices) >= num_to_select:
-                            break
-                        if not bool(big_mask[idx]) or not bool(outlier_mask[idx]):
-                            continue
-                        if _try_select_idx(
-                            idx,
-                            allow_tiny=False,
-                            allow_outliers=True,
-                            enforce_cap=False,
-                            cap_value=base_cap,
-                            require_tiny_thresholds=False,
-                        ):
-                            fill_strategy_counts["last_resort_outlier"] += 1
-                            last_resort_outlier_counts["big"] += 1
+                    _add_selected(int(chosen_idx))
+                    chosen_stage_name = str(chosen_stage["name"])
+                    selected_count_by_stage[chosen_stage_name] = int(selected_count_by_stage.get(chosen_stage_name, 0)) + 1
+                    stage_cursor[chosen_stage_name] = int(chosen_ptr + 1)
+                    global_selection_trace.append(
+                        {
+                            "stage_name": chosen_stage_name,
+                            "index": int(chosen_idx),
+                            "basin_id": int(roots_eff[int(chosen_idx)]),
+                            "bscore": float(score_by_idx.get(int(chosen_idx), 0.0)),
+                        }
+                    )
 
-                if len(dts_selected_indices) < num_to_select:
-                    for idx in ranked_idx:
-                        if len(dts_selected_indices) >= num_to_select:
-                            break
-                        if not bool(tiny_mask[idx]) or not bool(outlier_mask[idx]):
-                            continue
-                        if _try_select_idx(
-                            idx,
-                            allow_tiny=True,
-                            allow_outliers=True,
-                            enforce_cap=False,
-                            cap_value=base_cap,
-                            require_tiny_thresholds=False,
-                        ):
-                            fill_strategy_counts["last_resort_outlier"] += 1
-                            last_resort_outlier_counts["tiny"] += 1
+                underfilled_before_fill = max(0, int(num_to_select - int(selected_count_by_stage.get("stage1", 0))))
+                fill_strategy_counts["relax_cap_big"] = int(selected_count_by_stage.get("relax_cap_big", 0))
+                fill_strategy_counts["fallback_diversity_big"] = int(selected_count_by_stage.get("fallback_diversity_big", 0))
+                fill_strategy_counts["fallback_tiny"] = int(selected_count_by_stage.get("fallback_tiny", 0))
+                fill_strategy_counts["last_resort_outlier"] = int(selected_count_by_stage.get("last_resort_outlier", 0))
+                last_resort_outlier_counts["big"] = int(
+                    sum(1 for idx in dts_selected_indices if bool(big_mask[int(idx)]) and bool(outlier_mask[int(idx)]))
+                )
+                last_resort_outlier_counts["tiny"] = int(
+                    sum(1 for idx in dts_selected_indices if bool(tiny_mask[int(idx)]) and bool(outlier_mask[int(idx)]))
+                )
+                selected_from_hi_count = int(sum(1 for idx in dts_selected_indices if int(idx) in stage1_hi_set))
+                selected_from_rest_count = int(selected_count_by_stage.get("stage1", 0) - selected_from_hi_count)
+                stage1_scores = [float(score_by_idx.get(int(idx), 0.0)) for idx in dts_selected_indices if int(idx) in set(stage1_ranked)]
+                stage1_sel_min = float(np.min(stage1_scores)) if stage1_scores else float("nan")
+                stage1_sel_med = float(np.median(stage1_scores)) if stage1_scores else float("nan")
+                stage1_sel_max = float(np.max(stage1_scores)) if stage1_scores else float("nan")
+                print(
+                    "DTS Stage1 hi-band stats: "
+                    f"stage1_bmax={stage1_bmax:.6f}, "
+                    f"stage1_b_floor={stage1_b_floor:.6f}, "
+                    f"stage1_candidates_count={int(len(stage1_candidates))}, "
+                    f"stage1_hi_count={int(len(stage1_hi_pool))}, "
+                    f"selected_from_hi_count={int(selected_from_hi_count)}, "
+                    f"selected_from_rest_count={int(selected_from_rest_count)}, "
+                    f"per_basin_cap_rejections_stage1_hi={int(max(0, per_basin_cap_rejections_stage1_hi))}, "
+                    f"per_basin_cap_rejections_stage1_rest={int(max(0, per_basin_cap_rejections_stage1_rest))}, "
+                    f"selected_bscore_min={stage1_sel_min:.6f}, "
+                    f"selected_bscore_median={stage1_sel_med:.6f}, "
+                    f"selected_bscore_max={stage1_sel_max:.6f}"
+                )
+                print(f"DTS global selection trace: {json.dumps(global_selection_trace)}")
+                print(f"DTS selected_count_by_stage: {json.dumps(selected_count_by_stage)}")
+                print(f"DTS per_basin_cap_rejections_by_stage: {json.dumps(per_basin_cap_rejections_by_stage)}")
 
                 if fill_strategy_counts["last_resort_outlier"] > 0:
                     print(
@@ -2326,6 +3200,14 @@ class APTMDL:
                 selected_outlier_count = int(sum(bool(outlier_mask[idx]) for idx in dts_selected_indices))
                 selected_roots_raw = [int(roots_raw[idx]) for idx in dts_selected_indices]
                 selected_roots_eff = [int(roots_eff[idx]) for idx in dts_selected_indices]
+                selected_rows = [_format_candidate_row(int(idx)) for idx in dts_selected_indices]
+                selected_per_basin_counts = Counter(int(roots_eff[idx]) for idx in dts_selected_indices)
+                print(f"DTS selected candidates (ordered): {json.dumps(selected_rows)}")
+                print(
+                    "DTS selected basin coverage: "
+                    f"selected_unique_basins={int(len(selected_per_basin_counts))}, "
+                    f"selected_per_basin_counts={json.dumps({str(k): int(v) for k, v in sorted(selected_per_basin_counts.items(), key=lambda kv: kv[0])})}"
+                )
                 dts_selection_stats = {
                     "selected_count": int(len(dts_selected_indices)),
                     "selected_big_count": int(selected_big_count),
@@ -2393,6 +3275,7 @@ class APTMDL:
 
             # Oracle editing to obtain A_e^(r)
             # Pass the list of images A_r directly to oracle with predictions
+            self.last_active_set_metrics = None
             oracle_results = self.oracle_label_and_edit(
                 A_r,
                 predictions=predictions_for_oracle,
@@ -2539,9 +3422,9 @@ class APTMDL:
                 try:
                     os.makedirs(self.logs_dir, exist_ok=True)
                     if self.fold is not None:
-                        eval_log_name = f"validation_metrics_fold={self.fold}_selection={self.selection_method}.jsonl"
+                        eval_log_name = f"validation_metrics_fold={self.fold}_selection={self.selection_artifact_token}.jsonl"
                     else:
-                        eval_log_name = f"validation_metrics_selection={self.selection_method}.jsonl"
+                        eval_log_name = f"validation_metrics_selection={self.selection_artifact_token}.jsonl"
                     eval_log_path = os.path.join(self.logs_dir, eval_log_name)
                     with open(eval_log_path, "a", encoding="utf-8") as f:
                         f.write(json.dumps(eval_log) + "\n")
@@ -2555,7 +3438,18 @@ class APTMDL:
                     )
                     stop_due_to_accuracy = True
 
+            try:
+                self._persist_fold_results(
+                    round_num=r,
+                    validation_metrics=validation_metrics,
+                    active_set_metrics=self.last_active_set_metrics,
+                    **gen_kwargs,
+                )
+            except Exception as e:
+                print(f"Warning: failed to persist fold results summary: {e}")
+
             # Save checkpoint
+            self.unlabeled_data = unlabeled_data
             self.save_checkpoint(r, validation_avg_acc, checkpoint_path)
             
             # Delete intra-round log after successful completion of the round
@@ -2575,7 +3469,36 @@ class APTMDL:
                     print(f"Error deleting embedding cache: {e}")
 
             if stop_due_to_accuracy:
+                last_completed_round = int(r)
                 break
+            last_completed_round = int(r)
+
+        test_eval_kwargs = dict(gen_kwargs)
+        test_eval_kwargs.pop("label_map", None)
+        test_metrics = self._evaluate_test_subset(
+            test_data=test_data or [],
+            round_num=last_completed_round,
+            label_map=gen_kwargs.get("label_map"),
+            **test_eval_kwargs,
+        )
+        if test_metrics is None:
+            print("Final test evaluation skipped.")
+        else:
+            print(
+                f"Final test avg class accuracy (round {last_completed_round}): "
+                f"{float(test_metrics['avg_class_accuracy_pct']):.1f}% | "
+                f"classwise={test_metrics['class_accuracy_pct']} | "
+                f"sampled_per_class={test_metrics['sampled_per_class']} | "
+                f"predicted_per_class={test_metrics.get('predicted_per_class', {})} | "
+                f"pred_file={test_metrics.get('test_predictions_path', '')}"
+            )
+            try:
+                self._persist_final_test_results(
+                    test_metrics=test_metrics,
+                    **gen_kwargs,
+                )
+            except Exception as e:
+                print(f"Warning: failed to persist final test metrics: {e}")
 
         # Save prompt set
         if os.path.dirname(self.prompt_set_path):
@@ -2617,8 +3540,12 @@ def parse_arguments():
                         help="Name of the dataset.")
     parser.add_argument("--fold", type=int, default=None,
                         help="Fold number (optional). If provided, sets default paths for data and init prompts.")
+    parser.add_argument("--folds", type=str, default=None,
+                        help="Comma-separated folds to run in sequence (e.g., '5,6,10').")
     parser.add_argument("--val_json_path", type=str, default=None,
                         help="Path to validation json directory (optional if fold provided).")
+    parser.add_argument("--test_json_path", type=str, default=None,
+                        help="Path to test jsonl file (optional if fold provided).")
     parser.add_argument("--unlabeled_data_json_path", type=str, required=False,
                         help="Path to unlabeled data json file (optional if fold provided).")
     parser.add_argument("--vlm_log_path", type=str, default=None,
@@ -2629,7 +3556,7 @@ def parse_arguments():
                         help="Optional path to APT-v3/oracle.py. Defaults to ../APT-v3/oracle.py from this file.")
     parser.add_argument("--oracle_dataset_name", type=str, default=None,
                         help="Optional dataset name passed to oracle.py (e.g., Lurcher). Auto-resolved if omitted.")
-    parser.add_argument("--prompts_root", type=str, default="prompts",
+    parser.add_argument("--prompts_root", type=str, default="prompt_sets",
                         help="Root directory where pre/post oracle round prompt JSONs are stored.")
     parser.add_argument("--resume", action="store_true",
                         help="Resume from the last checkpoint if available.")
@@ -2641,17 +3568,21 @@ def parse_arguments():
                         help="Directory to save logs, including intra-round checkpoints.")
     parser.add_argument("--val_results_root", type=str, default="val_results",
                         help="Directory root for per-round validation prediction dumps.")
+    parser.add_argument("--test_results_root", type=str, default="test_results",
+                        help="Directory root for final test prediction dumps.")
+    parser.add_argument("--results_root", type=str, default="results",
+                        help="Directory root for consolidated per-fold JSON summaries.")
 
     # Selection method and DTS parameters
     parser.add_argument("--selection_method", type=str, required=True, choices=["mdl", "dts"],
-                        help="Active-set scoring method: 'mdl' (existing) or 'dts' (CLIP density-tree).")
-    parser.add_argument("--dts_k", type=int, default=80,
+                        help="Active-set scoring method: 'mdl' (existing) or 'dts' (embedding density-tree).")
+    parser.add_argument("--dts_k", type=int, default=60,
                         help="k for DTS neighborhood graph construction.")
     parser.add_argument("--dts_k_rho", type=int, default=30,
                         help="k_rho neighbors for DTS density proxy.")
-    parser.add_argument("--dts_k_t", type=int, default=30,
+    parser.add_argument("--dts_k_t", type=int, default=20,
                         help="k_t neighbor index used to define DTS local threshold radius.")
-    parser.add_argument("--dts_k_b", type=int, default=20,
+    parser.add_argument("--dts_k_b", type=int, default=15,
                         help="k_b neighbors used to compute DTS boundary score.")
     parser.add_argument("--dts_mutual_knn", action="store_true",
                         help="Use HYBRID mutual-kNN in DTS: rho and t_i from standard kNN; parent links and boundary use mutual-kNN.")
@@ -2670,8 +3601,13 @@ def parse_arguments():
     parser.add_argument("--no_dts_tune_hparams", dest="dts_tune_hparams", action="store_false",
                         help="Disable DTS hyperparameter mutation; diagnostics/tuner decisions are still logged.")
     parser.set_defaults(dts_tune_hparams=True)
+    parser.add_argument("--dts_clip_model_alias", type=str, default=DEFAULT_DTS_CLIP_MODEL_ALIAS,
+                        choices=sorted(DTS_CLIP_MODEL_ALIASES.keys()),
+                        help="DTS embedding model alias key.")
+    parser.add_argument("--dts_clip_model_name", type=str, default=None,
+                        help="(Legacy fallback) DTS embedding model id or alias; ignored if dts_clip_model_alias is set.")
     parser.add_argument("--clip_batch_size", type=int, default=32,
-                        help="Batch size used by CLIP image embedding in DTS.")
+                        help="Batch size used by DTS image embedding model.")
     parser.add_argument("--diagnostic_mode", action="store_true",
                         help="Enable DTS diagnostics artifacts (plots/panels/purity reports).")
     parser.add_argument("--show_interactive", action="store_true",
@@ -2759,120 +3695,172 @@ if __name__ == "__main__":
     if args.dataset == "microscopy_lurcher":
         args.label_map = ["wild", "lurcher"]
 
-    fold_seed = resolve_fold_random_seed(
-        dataset_name=args.dataset,
-        fold=args.fold,
-        datasets_root="datasets",
-    )
-    if fold_seed is not None:
-        set_global_random_seed(fold_seed)
-        args.diagnostic_seed = int(fold_seed)
-        print(f"Using fold random seed: {fold_seed} (dataset={args.dataset}, fold={args.fold})")
-    else:
-        print(
-            f"Warning: could not resolve fold random seed for dataset={args.dataset}, fold={args.fold}. "
-            "Run may be non-reproducible."
-        )
-    
-    # Auto-configure paths if fold is provided
+    fold_values: List[int] = []
+    if args.folds:
+        for token in str(args.folds).split(","):
+            token = token.strip()
+            if not token:
+                continue
+            try:
+                fold_values.append(int(token))
+            except ValueError:
+                raise ValueError(f"Invalid fold in --folds: '{token}'")
     if args.fold is not None:
-        if args.unlabeled_data_json_path is None:
-            args.unlabeled_data_json_path = f"datasets/{args.dataset}/fold-{args.fold}/train.jsonl"
-        if args.val_json_path is None:
-            preferred_val_selected = f"datasets/{args.dataset}/fold-{args.fold}/val_selected.jsonl"
-            fallback_val = f"datasets/{args.dataset}/fold-{args.fold}/val.jsonl"
-            args.val_json_path = preferred_val_selected if os.path.exists(preferred_val_selected) else fallback_val
-            
-        # Update checkpoint and prompt set paths if they differ from default
-        # (Only if user hasn't explicitly provided a custom path, assuming defaults are used)
-        if args.checkpoint_path == "checkpoint.json":
-            args.checkpoint_path = f"checkpoint_fold={args.fold}.json"
-        
-        if args.prompt_set_path == "final_prompt_set.json":
-            args.prompt_set_path = f"final_prompt_set_fold={args.fold}.json"
+        fold_values.append(int(args.fold))
 
-    # Method-specific artifact names prevent MDL/DTS runs from resuming each other's files.
-    args.checkpoint_path = with_selection_suffix(args.checkpoint_path, args.selection_method)
-    args.prompt_set_path = with_selection_suffix(args.prompt_set_path, args.selection_method)
-    if args.vlm_log_path:
-        args.vlm_log_path = with_selection_suffix(args.vlm_log_path, args.selection_method)
-            
-    # Validate required paths
-    if args.unlabeled_data_json_path is None:
-        raise ValueError("Unlabeled data path must be provided or derived from --fold.")
-    if args.val_json_path is None:
-        # Fallback to default if not provided and not derived
-        args.val_json_path = "validation.json"
+    if not fold_values:
+        raise ValueError("Provide at least one fold using --fold or --folds.")
 
-    # Convert args to kwargs for APTMDL init
-    # Note: APTMDL init expects system_prompt_1_path, but args has system_prompt_1
-    aptmdl = APTMDL(
-        system_prompt_1_path=args.system_prompt_1,
-        system_prompt_2_path=args.system_prompt_2,
-        selection_method=args.selection_method,
-        alpha=args.alpha,
-        beta=args.beta,
-        lambda_mdl=args.lambda_mdl,
-        lambda_c=args.lambda_c,
-        K_uncertainty=args.K_uncertainty,
-        mdl_tol=args.mdl_tol,
-        max_rounds=args.max_rounds,
-        candidate_pool_size=args.candidate_pool_size,
-        dts_k=args.dts_k,
-        dts_k_rho=args.dts_k_rho,
-        dts_k_t=args.dts_k_t,
-        dts_k_b=args.dts_k_b,
-        dts_mutual_knn=args.dts_mutual_knn,
-        dts_mcluster_min=args.dts_mcluster_min,
-        dts_c_tiny=args.dts_c_tiny,
-        dts_max_per_basin=args.dts_max_per_basin,
-        dts_deg_min_tiny=args.dts_deg_min_tiny,
-        dts_b_min_tiny=args.dts_b_min_tiny,
-        dts_tune_hparams=args.dts_tune_hparams,
-        diagnostic_mode=args.diagnostic_mode,
-        show_interactive=args.show_interactive,
-        diagnostic_every=args.diagnostic_every,
-        diagnostic_outdir=args.diagnostic_outdir,
-        diagnostic_seed=args.diagnostic_seed,
-        max_images_per_panel=args.max_images_per_panel,
-        clip_batch_size=args.clip_batch_size,
-        val_batch_size=args.val_batch_size,
-        debug=args.debug,
-        oracle_path=args.oracle_path,
-        prompt_set_path=args.prompt_set_path,
-        logs_dir=args.logs_dir,
-        fold=args.fold,
-        stopping_accuracy=args.stopping_accuracy
-    )
-    # Initialize seed prompts
-    aptmdl.initialize_seed(args.init_prompts_path, args.dataset, fold=args.fold)
-    # Load unlabeled data initially (will be overwritten if resuming)
-    aptmdl.unlabeled_data = load_data(args.unlabeled_data_json_path, args.label_map)
-    print("Unlabeled data size: ", len(aptmdl.unlabeled_data))
+    folds_to_run = sorted(set(fold_values))
+    print(f"Running folds in order: {folds_to_run}")
 
-    aptmdl.val_data = load_data(args.val_json_path, args.label_map)
-    print("Validation data size: ", len(aptmdl.val_data))
+    multi_fold_mode = len(folds_to_run) > 1
 
-    aptmdl.run(
-        unlabeled_data=aptmdl.unlabeled_data,
-        val_data=aptmdl.val_data,
-        initial_batch_size=args.initial_batch_size,
-        selection_batch_size=args.selection_batch_size,
-        vlm_query_batch_size=args.vlm_query_batch_size,
-        model=args.model,
-        temperature=args.temperature,
-        max_tokens=args.max_tokens,
-        top_p=args.top_p,
-        label_map=args.label_map,
-        vlm_log_path=args.vlm_log_path,
-        debug=args.debug,
-        resume=args.resume,
-        checkpoint_path=args.checkpoint_path,
-        prompt_set_path=args.prompt_set_path,
-        dataset=args.dataset,
-        logs_dir=args.logs_dir,
-        val_results_root=args.val_results_root,
-        oracle_script_path=args.oracle_script_path,
-        oracle_dataset_name=args.oracle_dataset_name,
-        prompts_root=args.prompts_root
-    )
+    def _fold_scoped_path(path_value: Optional[str], fold_num: int, default_name: str) -> str:
+        raw = default_name if path_value is None else str(path_value)
+        if "{fold}" in raw:
+            return raw.replace("{fold}", str(fold_num))
+        if raw == default_name:
+            if default_name == "checkpoint.json":
+                return f"checkpoint_fold={fold_num}.json"
+            if default_name == "final_prompt_set.json":
+                return f"final_prompt_set_fold={fold_num}.json"
+            return raw
+        if multi_fold_mode:
+            p = Path(raw)
+            if f"fold={fold_num}" not in p.stem and f"fold-{fold_num}" not in p.stem:
+                return str(p.with_name(f"{p.stem}_fold={fold_num}{p.suffix}"))
+        return raw
+
+    for fold_num in folds_to_run:
+        print(f"\n================ Fold {fold_num} ================")
+
+        fold_seed = resolve_fold_random_seed(
+            dataset_name=args.dataset,
+            fold=fold_num,
+            datasets_root="datasets",
+        )
+        fold_diagnostic_seed = int(args.diagnostic_seed)
+        if fold_seed is not None:
+            set_global_random_seed(fold_seed)
+            fold_diagnostic_seed = int(fold_seed)
+            print(f"Using fold random seed: {fold_seed} (dataset={args.dataset}, fold={fold_num})")
+        else:
+            print(
+                f"Warning: could not resolve fold random seed for dataset={args.dataset}, fold={fold_num}. "
+                "Run may be non-reproducible."
+            )
+
+        unlabeled_data_json_path = args.unlabeled_data_json_path
+        val_json_path = args.val_json_path
+        test_json_path = args.test_json_path
+        if unlabeled_data_json_path is None:
+            unlabeled_data_json_path = f"datasets/{args.dataset}/fold-{fold_num}/train.jsonl"
+        if val_json_path is None:
+            preferred_val_selected = f"datasets/{args.dataset}/fold-{fold_num}/val_selected.jsonl"
+            fallback_val = f"datasets/{args.dataset}/fold-{fold_num}/val.jsonl"
+            val_json_path = preferred_val_selected if os.path.exists(preferred_val_selected) else fallback_val
+        if test_json_path is None:
+            test_json_path = f"datasets/{args.dataset}/fold-{fold_num}/test.jsonl"
+
+        checkpoint_path = _fold_scoped_path(args.checkpoint_path, fold_num, "checkpoint.json")
+        prompt_set_path = _fold_scoped_path(args.prompt_set_path, fold_num, "final_prompt_set.json")
+        vlm_log_path = args.vlm_log_path
+        if vlm_log_path:
+            vlm_log_path = _fold_scoped_path(vlm_log_path, fold_num, "vlm_log.json")
+
+        resolved_dts_clip_model_name = _resolve_dts_clip_model_from_inputs(
+            dts_clip_model_alias=args.dts_clip_model_alias,
+            dts_clip_model_name=args.dts_clip_model_name,
+        )
+        selection_artifact_token = _selection_artifact_token(
+            selection_method=args.selection_method,
+            dts_clip_model_name=resolved_dts_clip_model_name,
+        )
+
+        checkpoint_path = with_selection_suffix(checkpoint_path, selection_artifact_token)
+        prompt_set_path = with_selection_suffix(prompt_set_path, selection_artifact_token)
+        if vlm_log_path:
+            vlm_log_path = with_selection_suffix(vlm_log_path, selection_artifact_token)
+
+        aptmdl = APTMDL(
+            system_prompt_1_path=args.system_prompt_1,
+            system_prompt_2_path=args.system_prompt_2,
+            selection_method=args.selection_method,
+            alpha=args.alpha,
+            beta=args.beta,
+            lambda_mdl=args.lambda_mdl,
+            lambda_c=args.lambda_c,
+            K_uncertainty=args.K_uncertainty,
+            mdl_tol=args.mdl_tol,
+            max_rounds=args.max_rounds,
+            candidate_pool_size=args.candidate_pool_size,
+            dts_k=args.dts_k,
+            dts_k_rho=args.dts_k_rho,
+            dts_k_t=args.dts_k_t,
+            dts_k_b=args.dts_k_b,
+            dts_mutual_knn=args.dts_mutual_knn,
+            dts_mcluster_min=args.dts_mcluster_min,
+            dts_c_tiny=args.dts_c_tiny,
+            dts_max_per_basin=args.dts_max_per_basin,
+            dts_deg_min_tiny=args.dts_deg_min_tiny,
+            dts_b_min_tiny=args.dts_b_min_tiny,
+            dts_tune_hparams=args.dts_tune_hparams,
+            dts_clip_model_name=resolved_dts_clip_model_name,
+            diagnostic_mode=args.diagnostic_mode,
+            show_interactive=args.show_interactive,
+            diagnostic_every=args.diagnostic_every,
+            diagnostic_outdir=args.diagnostic_outdir,
+            diagnostic_seed=fold_diagnostic_seed,
+            max_images_per_panel=args.max_images_per_panel,
+            clip_batch_size=args.clip_batch_size,
+            val_batch_size=args.val_batch_size,
+            debug=args.debug,
+            oracle_path=args.oracle_path,
+            prompt_set_path=prompt_set_path,
+            logs_dir=args.logs_dir,
+            fold=fold_num,
+            stopping_accuracy=args.stopping_accuracy
+        )
+        aptmdl.initialize_seed(args.init_prompts_path, args.dataset, fold=fold_num)
+        aptmdl.unlabeled_data = load_data(unlabeled_data_json_path, args.label_map)
+        print("Unlabeled data size: ", len(aptmdl.unlabeled_data))
+
+        aptmdl.val_data = load_data(val_json_path, args.label_map)
+        print("Validation data size: ", len(aptmdl.val_data))
+        aptmdl.test_data = []
+        if test_json_path and os.path.exists(test_json_path):
+            aptmdl.test_data = load_data(test_json_path, args.label_map)
+            print("Test data size: ", len(aptmdl.test_data))
+        else:
+            if test_json_path:
+                print(f"Warning: test file not found at {test_json_path}. Final test evaluation will be skipped.")
+            else:
+                print("Warning: no test file path provided. Final test evaluation will be skipped.")
+
+        aptmdl.run(
+            unlabeled_data=aptmdl.unlabeled_data,
+            val_data=aptmdl.val_data,
+            test_data=aptmdl.test_data,
+            initial_batch_size=args.initial_batch_size,
+            selection_batch_size=args.selection_batch_size,
+            vlm_query_batch_size=args.vlm_query_batch_size,
+            model=args.model,
+            temperature=args.temperature,
+            max_tokens=args.max_tokens,
+            top_p=args.top_p,
+            label_map=args.label_map,
+            vlm_log_path=vlm_log_path,
+            debug=args.debug,
+            resume=args.resume,
+            checkpoint_path=checkpoint_path,
+            prompt_set_path=prompt_set_path,
+            dataset=args.dataset,
+            logs_dir=args.logs_dir,
+            val_results_root=args.val_results_root,
+            test_results_root=args.test_results_root,
+            results_root=args.results_root,
+            oracle_script_path=args.oracle_script_path,
+            oracle_dataset_name=args.oracle_dataset_name,
+            prompts_root=args.prompts_root
+        )

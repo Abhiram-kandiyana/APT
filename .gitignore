@@ -2,11 +2,26 @@ __pycache__/
 *.pyc
 .DS_Store
 .vscode/
-images/
-logs/
-tests/
 *.png
 *.jpg
 *.jpeg
 *.tiff
 *.tif
+
+# Runtime/output artifacts
+logs/
+diagnostics/
+*_old/
+*.log
+*.tmp
+
+# Checkpoints and local state
+checkpoint*.json
+checkpoint*.jsonl
+*.ckpt
+*.pt
+*.pth
+
+# Local environment/config
+.env
+.env.*

@@ -16,7 +16,7 @@ from PIL import Image
 from sklearn.neighbors import NearestNeighbors
 
 
-# Reuse the same CLIP model instance across rounds to avoid repeated model loads.
+# Reuse the same image-embedding model instance across rounds to avoid repeated model loads.
 _CLIP_EMBEDDER_CACHE: Dict[Tuple[str, str], "CLIPImageEmbedder"] = {}
 
 
@@ -26,7 +26,10 @@ class CLIPImageEmbedder:
         self.device = device
         self.model = None
         self.processor = None
+        self.preprocess = None
         self.torch = None
+        self.loaded_model_name = None
+        self.backend = None
 
     def _ensure_loaded(self):
         if self.model is not None and self.processor is not None:
@@ -34,7 +37,7 @@ class CLIPImageEmbedder:
 
         try:
             import torch
-            from transformers import CLIPImageProcessor, CLIPModel
+            from transformers import AutoModel, AutoProcessor
         except ImportError as e:
             raise ImportError(
                 "DTS selection requires torch and transformers. "
@@ -44,9 +47,77 @@ class CLIPImageEmbedder:
         if self.device is None:
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        # Image-only processor avoids tokenizer initialization entirely.
-        self.processor = CLIPImageProcessor.from_pretrained(self.model_name)
-        self.model = CLIPModel.from_pretrained(self.model_name).to(self.device)
+        # BiomedCLIP is most reliable via open_clip + HF hub weights.
+        if str(self.model_name).strip().lower() == "microsoft/biomedclip-pubmedbert_256-vit_base_patch16_224":
+            try:
+                import open_clip
+            except ImportError as e:
+                raise ImportError(
+                    "BiomedCLIP requires 'open_clip_torch'. Install with: "
+                    "python -m pip install open_clip_torch"
+                ) from e
+            hf_id = f"hf-hub:{self.model_name}"
+            created = open_clip.create_model_from_pretrained(hf_id, device=self.device)
+            if isinstance(created, tuple):
+                self.model = created[0]
+                # open_clip variants may return (model, preprocess) or longer tuples.
+                self.preprocess = created[1] if len(created) > 1 else None
+                if self.preprocess is None and len(created) > 2:
+                    self.preprocess = created[2]
+            else:
+                self.model = created
+                self.preprocess = None
+            if self.preprocess is None:
+                raise RuntimeError(
+                    "open_clip did not return an image preprocessing transform for BiomedCLIP."
+                )
+            self.loaded_model_name = self.model_name
+            self.backend = "open_clip"
+            self.model.eval()
+            self.torch = torch
+            return
+
+        candidates = [self.model_name]
+        if self.model_name != "openai/clip-vit-base-patch32":
+            # Robust fallback for environments where BiomedCLIP processor metadata is unavailable.
+            candidates.append("openai/clip-vit-base-patch32")
+
+        load_errors = []
+        for candidate in candidates:
+            try:
+                # Prefer generic auto classes for compatibility with BiomedCLIP variants.
+                self.processor = AutoProcessor.from_pretrained(candidate, trust_remote_code=True)
+                self.model = AutoModel.from_pretrained(candidate, trust_remote_code=True).to(self.device)
+                self.loaded_model_name = candidate
+                self.backend = "transformers"
+                break
+            except Exception as auto_err:
+                try:
+                    from transformers import CLIPImageProcessor, CLIPModel
+
+                    # Fallback for standard CLIP checkpoints.
+                    self.processor = CLIPImageProcessor.from_pretrained(candidate)
+                    self.model = CLIPModel.from_pretrained(candidate).to(self.device)
+                    self.loaded_model_name = candidate
+                    self.backend = "transformers"
+                    break
+                except Exception as clip_err:
+                    load_errors.append(
+                        f"{candidate} -> Auto load error: {auto_err}; CLIP load error: {clip_err}"
+                    )
+
+        if self.model is None or self.processor is None:
+            joined = " | ".join(load_errors) if load_errors else "unknown error"
+            raise RuntimeError(
+                "Failed to load any DTS embedding model. "
+                f"Tried: {candidates}. Details: {joined}"
+            )
+
+        if self.loaded_model_name and self.loaded_model_name != self.model_name:
+            print(
+                f"Warning: DTS embedding model '{self.model_name}' failed to load; "
+                f"falling back to '{self.loaded_model_name}'."
+            )
         self.model.eval()
         self.torch = torch
 
@@ -64,10 +135,28 @@ class CLIPImageEmbedder:
                     with Image.open(image_path) as img:
                         images.append(img.convert("RGB"))
 
-                inputs = self.processor(images=images, return_tensors="pt")
-                inputs = {k: v.to(self.device) for k, v in inputs.items()}
+                if self.backend == "open_clip":
+                    image_tensors = [self.preprocess(img) for img in images]
+                    image_batch = self.torch.stack(image_tensors).to(self.device)
+                    image_features = self.model.encode_image(image_batch)
+                else:
+                    inputs = self.processor(images=images, return_tensors="pt")
+                    inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
-                image_features = self.model.get_image_features(**inputs)
+                    if hasattr(self.model, "get_image_features"):
+                        image_features = self.model.get_image_features(**inputs)
+                    else:
+                        outputs = self.model(**inputs)
+                        if hasattr(outputs, "image_embeds"):
+                            image_features = outputs.image_embeds
+                        elif hasattr(outputs, "pooler_output"):
+                            image_features = outputs.pooler_output
+                        elif isinstance(outputs, (list, tuple)) and len(outputs) > 0:
+                            image_features = outputs[0]
+                        else:
+                            raise RuntimeError(
+                                f"Unsupported embedding output format from model: {self.model_name}"
+                            )
                 image_features = image_features / (image_features.norm(dim=-1, keepdim=True) + 1e-12)
                 all_embeddings.append(image_features.cpu().numpy())
 
@@ -234,7 +323,7 @@ def score_candidates_with_dts(
     k_t: int = 30,
     k_b: int = 20,
     use_mutual_knn: bool = False,
-    clip_model_name: str = "openai/clip-vit-base-patch32",
+    clip_model_name: str = "microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224",
     clip_batch_size: int = 32,
     clip_device: str = None,
     embedding_cache_path: str = None,
