@@ -34,10 +34,10 @@ def parse_args() -> argparse.Namespace:
         help="Round key under each fold in splits.json (default: round-1).",
     )
     parser.add_argument(
-        "--samples-per-class",
+        "--samples-per-case",
         type=int,
         default=25,
-        help="Number of samples per class to write to val_selected.jsonl (default: 25).",
+        help="Number of samples per case to write to val_selected.jsonl (default: 25).",
     )
     return parser.parse_args()
 
@@ -96,25 +96,87 @@ def split_train_to_val(
     return remaining, val_rows
 
 
-def select_balanced_by_class(
+def extract_case_id(row: dict) -> str:
+    return Path(str(row.get("image_path", ""))).parent.name
+
+
+def extract_slide_id(row: dict) -> str:
+    """
+    Parse slide ID from image filename:
+    6480_lurcher_10x_lurcher_3_1_Image_03.jpg -> slide_id = "3"
+    """
+    stem = Path(str(row.get("image_path", ""))).stem
+    parts = stem.split("_")
+    if len(parts) < 4:
+        return "unknown"
+    return parts[-4]
+
+
+def select_case_slide_balanced(
+    case_rows: List[dict],
+    samples_per_case: int,
+    rng: random.Random,
+) -> List[dict]:
+    if len(case_rows) <= samples_per_case:
+        return list(case_rows)
+
+    by_slide: Dict[str, List[dict]] = defaultdict(list)
+    for row in case_rows:
+        by_slide[extract_slide_id(row)].append(row)
+
+    # Shuffle rows within each slide once, then pick in round-robin across slides
+    # to keep slide representation as uniform as possible.
+    for slide_id in by_slide:
+        rng.shuffle(by_slide[slide_id])
+
+    slide_order = sorted(by_slide.keys())
+    selected: List[dict] = []
+    selected_count_by_slide: Dict[str, int] = defaultdict(int)
+
+    while len(selected) < samples_per_case:
+        candidates = [
+            slide_id
+            for slide_id in slide_order
+            if selected_count_by_slide[slide_id] < len(by_slide[slide_id])
+        ]
+        if not candidates:
+            break
+
+        # Prioritize slides with fewer selections so far; use RNG for deterministic
+        # tie-breaking under the fold seed.
+        min_selected = min(selected_count_by_slide[slide_id] for slide_id in candidates)
+        least_selected = [
+            slide_id
+            for slide_id in candidates
+            if selected_count_by_slide[slide_id] == min_selected
+        ]
+        chosen_slide = rng.choice(least_selected)
+        idx = selected_count_by_slide[chosen_slide]
+        selected.append(by_slide[chosen_slide][idx])
+        selected_count_by_slide[chosen_slide] += 1
+
+    return selected
+
+
+def select_balanced_by_case(
     val_rows: List[dict],
-    samples_per_class: int,
+    samples_per_case: int,
     seed: int,
 ) -> List[dict]:
     grouped: Dict[str, List[dict]] = defaultdict(list)
     for row in val_rows:
-        grouped[normalize_class(str(row.get("class", "")))].append(row)
+        grouped[extract_case_id(row)].append(row)
 
     rng = random.Random(seed)
     selected: List[dict] = []
-
-    for class_name in sorted(grouped):
-        candidates = list(grouped[class_name])
-        if len(candidates) <= samples_per_class:
-            selected.extend(candidates)
-            continue
-        selected.extend(rng.sample(candidates, samples_per_class))
-
+    for case_id in sorted(grouped):
+        selected.extend(
+            select_case_slide_balanced(
+                case_rows=grouped[case_id],
+                samples_per_case=samples_per_case,
+                rng=rng,
+            )
+        )
     return selected
 
 
@@ -155,9 +217,9 @@ def main() -> None:
         _, val_rows = split_train_to_val(train_rows, case_ids_by_class)
 
         fold_seed = int(fold_splits.get("random seed", 0))
-        selected_rows = select_balanced_by_class(
+        selected_rows = select_balanced_by_case(
             val_rows=val_rows,
-            samples_per_class=args.samples_per_class,
+            samples_per_case=args.samples_per_case,
             seed=fold_seed,
         )
 
@@ -166,10 +228,14 @@ def main() -> None:
 
         class_counts = defaultdict(int)
         selected_counts = defaultdict(int)
+        selected_case_counts = defaultdict(int)
+        selected_slide_counts = defaultdict(int)
         for row in val_rows:
             class_counts[normalize_class(str(row.get("class", "")))] += 1
         for row in selected_rows:
             selected_counts[normalize_class(str(row.get("class", "")))] += 1
+            selected_case_counts[extract_case_id(row)] += 1
+            selected_slide_counts[f"{extract_case_id(row)}:slide-{extract_slide_id(row)}"] += 1
 
         print(f"fold-{fold}: wrote {val_path} ({len(val_rows)} rows)")
         print(f"fold-{fold}: val class counts {dict(sorted(class_counts.items()))}")
@@ -179,6 +245,9 @@ def main() -> None:
         print(
             f"fold-{fold}: val_selected class counts {dict(sorted(selected_counts.items()))}"
         )
+        print(
+            f"fold-{fold}: val_selected case counts {dict(sorted(selected_case_counts.items()))}"
+        )
 
 
 if __name__ == "__main__":
@@ -187,6 +256,6 @@ if __name__ == "__main__":
 #   --dataset-dir /Users/abhiramkandiyana/Microscopy/Microscopy/APT-MDL/datasets/microscopy_lurcher \
 #   --folds 6 10 \
 #   --round-key round-1 \
-#   --samples-per-class 25
+#   --samples-per-case 25
 
     main()
