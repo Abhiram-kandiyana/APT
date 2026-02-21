@@ -20,6 +20,7 @@ import subprocess
 import tempfile
 import sys
 import shutil
+import hashlib
 from numbers import Integral
 from pathlib import Path
 from datetime import datetime
@@ -99,6 +100,108 @@ def _safe_path_token(value: Any, default: str = "unknown") -> str:
     token = re.sub(r"[^A-Za-z0-9._=-]+", "_", token)
     token = token.strip("._-")
     return token or default
+
+
+_UNCERTAINTY_CACHE_MEM: Dict[str, Dict[str, Dict[str, Any]]] = {}
+
+
+def _resolve_uncertainty_cache_path(**gen_kwargs) -> str:
+    cache_path = str(gen_kwargs.get("uncertainty_cache_path", "logs/uncertainty_cache.jsonl") or "").strip()
+    if not cache_path:
+        cache_path = "logs/uncertainty_cache.jsonl"
+    return cache_path
+
+
+def _load_uncertainty_cache_entries(cache_path: str) -> Dict[str, Dict[str, Any]]:
+    if cache_path in _UNCERTAINTY_CACHE_MEM:
+        return _UNCERTAINTY_CACHE_MEM[cache_path]
+
+    entries: Dict[str, Dict[str, Any]] = {}
+    if os.path.exists(cache_path):
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        payload = json.loads(line)
+                    except Exception:
+                        continue
+                    if not isinstance(payload, dict):
+                        continue
+                    key = str(payload.get("key", "")).strip()
+                    if not key:
+                        continue
+                    entries[key] = payload
+        except Exception as e:
+            print(f"Warning: failed to load uncertainty cache {cache_path}: {e}")
+            entries = {}
+
+    _UNCERTAINTY_CACHE_MEM[cache_path] = entries
+    return entries
+
+
+def _append_uncertainty_cache_entry(cache_path: str, entry: Dict[str, Any]) -> None:
+    entries = _load_uncertainty_cache_entries(cache_path)
+    key = str(entry.get("key", "")).strip()
+    if not key:
+        return
+
+    entries[key] = dict(entry)
+
+    cache_dir = os.path.dirname(cache_path)
+    if cache_dir:
+        os.makedirs(cache_dir, exist_ok=True)
+    with open(cache_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry))
+        f.write("\n")
+
+
+def _prompt_set_signature(prompt_set: PromptSet) -> str:
+    serialized = [(str(x), str(c)) for x, c in prompt_set]
+    blob = json.dumps(serialized, ensure_ascii=True, separators=(",", ":"))
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _uncertainty_cache_key(
+    image_path: str,
+    prompt_set: PromptSet,
+    K: int,
+    **gen_kwargs,
+) -> Tuple[str, Optional[str], Dict[str, Any]]:
+    round_num = int(gen_kwargs.get("round_num", 0) or 0)
+    dataset = str(gen_kwargs.get("dataset", "") or "")
+    fold = gen_kwargs.get("fold", None)
+    model = str(gen_kwargs.get("model", "gpt-4o"))
+    temperature = float(gen_kwargs.get("temperature", 1))
+    top_p = float(gen_kwargs.get("top_p", 1.0))
+    max_tokens = int(gen_kwargs.get("max_tokens", 1000))
+    timeout_s = float(gen_kwargs.get("vlm_timeout_s", 120.0))
+
+    prompt_signature = None
+    prompt_mode = "round1_no_prompt_check"
+    if round_num > 1:
+        prompt_signature = _prompt_set_signature(prompt_set)
+        prompt_mode = "prompt_signature_required"
+
+    key_payload = {
+        "dataset": dataset,
+        "fold": fold,
+        "round": int(round_num),
+        "image_path": os.path.abspath(str(image_path)),
+        "model": model,
+        "temperature": temperature,
+        "top_p": top_p,
+        "max_tokens": max_tokens,
+        "vlm_timeout_s": timeout_s,
+        "K_uncertainty": int(K),
+        "prompt_mode": prompt_mode,
+        "prompt_signature": prompt_signature if prompt_signature is not None else "",
+    }
+    key_blob = json.dumps(key_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    key = hashlib.sha256(key_blob.encode("utf-8")).hexdigest()
+    return key, prompt_signature, key_payload
 
 
 def _selection_artifact_token(
@@ -776,20 +879,94 @@ def _stochastic_label_samples(
     Returns a list where each entry is [pred_1, ..., pred_K] for one image.
     """
     images = x if isinstance(x, list) else [x]
-    image_predictions: List[List[int]] = [[] for _ in images]
+    counts_by_image = _stochastic_label_counts(
+        x=images,
+        system_prompt_1=system_prompt_1,
+        system_prompt_2=system_prompt_2,
+        prompt_set=prompt_set,
+        K=K,
+        **gen_kwargs,
+    )
+    image_predictions: List[List[int]] = []
+    for counts in counts_by_image:
+        preds: List[int] = []
+        for label, count in sorted(counts.items(), key=lambda kv: int(kv[0])):
+            preds.extend([int(label)] * int(count))
+        image_predictions.append(preds)
+    return image_predictions
+
+
+def _stochastic_label_counts(
+    x: Union[Image, List[Image]],
+    system_prompt_1: str,
+    system_prompt_2: str,
+    prompt_set: PromptSet,
+    K: int = 5,
+    **gen_kwargs
+) -> List[Counter]:
+    """
+    Collect K stochastic predicted labels per image as label-count counters.
+    Uses shared cache across selection methods.
+    """
+    images = x if isinstance(x, list) else [x]
+    image_counts: List[Counter] = [Counter() for _ in images]
+    remaining_calls = [int(K) for _ in images]
 
     cached_preds = {}
     if gen_kwargs.get("debug", False):
         cached_preds = load_cached_preds(gen_kwargs)
 
-    for _ in range(K):
+    cache_path = _resolve_uncertainty_cache_path(**gen_kwargs)
+    cache_entries = _load_uncertainty_cache_entries(cache_path)
+    cache_meta: List[Tuple[str, Optional[str], Dict[str, Any]]] = []
+    cache_full_hit: List[bool] = [False for _ in images]
+
+    for idx, img in enumerate(images):
+        key, prompt_signature, key_payload = _uncertainty_cache_key(
+            image_path=str(img),
+            prompt_set=prompt_set,
+            K=K,
+            **gen_kwargs,
+        )
+        cache_meta.append((key, prompt_signature, key_payload))
+        entry = cache_entries.get(key)
+        if not isinstance(entry, dict):
+            continue
+        raw_counts = entry.get("label_counts", {})
+        if not isinstance(raw_counts, dict):
+            continue
+        total_samples = int(entry.get("total_samples", 0) or 0)
+        if total_samples <= 0:
+            continue
+        if total_samples > int(K):
+            continue
+        restored = Counter()
+        for k_raw, v_raw in raw_counts.items():
+            try:
+                lbl = int(k_raw)
+                cnt = int(v_raw)
+                if cnt > 0:
+                    restored[lbl] += cnt
+            except (TypeError, ValueError):
+                continue
+        if int(sum(restored.values())) != total_samples:
+            continue
+        image_counts[idx] = restored
+        remaining_calls[idx] = int(K) - total_samples
+        if remaining_calls[idx] == 0:
+            cache_full_hit[idx] = True
+
+    max_steps = max(remaining_calls) if remaining_calls else 0
+    for _ in range(max_steps):
         batch_to_query = []
         indices_to_query = []
-        current_preds: List[Optional[int]] = [None] * len(images)
 
         for idx, img in enumerate(images):
+            if remaining_calls[idx] <= 0:
+                continue
             if str(img) in cached_preds:
-                current_preds[idx] = int(cached_preds[str(img)]["label"])
+                image_counts[idx][int(cached_preds[str(img)]["label"])] += 1
+                remaining_calls[idx] -= 1
             else:
                 batch_to_query.append(img)
                 indices_to_query.append(idx)
@@ -801,14 +978,48 @@ def _stochastic_label_samples(
                 **gen_kwargs
             )
             for idx, (y_hat, _) in zip(indices_to_query, results):
-                current_preds[idx] = int(y_hat)
+                image_counts[idx][int(y_hat)] += 1
+                remaining_calls[idx] -= 1
 
-        for idx, pred in enumerate(current_preds):
-            if pred is None:
-                raise RuntimeError("Missing stochastic prediction for uncertainty estimation.")
-            image_predictions[idx].append(int(pred))
+    if any(rem != 0 for rem in remaining_calls):
+        raise RuntimeError("Missing stochastic prediction for uncertainty estimation.")
 
-    return image_predictions
+    for idx, img in enumerate(images):
+        counts = image_counts[idx]
+        total = int(sum(counts.values()))
+        if total != int(K):
+            raise RuntimeError("Uncertainty cache/sample count mismatch.")
+        if cache_full_hit[idx]:
+            continue
+        key, prompt_signature, key_payload = cache_meta[idx]
+        probs = [float(v) / float(total) for v in counts.values() if int(v) > 0]
+        entropy = float(-sum(p * np.log(p) for p in probs)) if probs else 0.0
+        freq_max = max(counts.values()) if counts else 0
+        uncertainty_val = float(1.0 - (float(freq_max) / float(total))) if total > 0 else 0.0
+
+        entry = {
+            "key": key,
+            "dataset": key_payload.get("dataset", ""),
+            "fold": key_payload.get("fold"),
+            "round": int(key_payload.get("round", 0) or 0),
+            "image_path": os.path.abspath(str(img)),
+            "model": key_payload.get("model"),
+            "temperature": key_payload.get("temperature"),
+            "top_p": key_payload.get("top_p"),
+            "max_tokens": key_payload.get("max_tokens"),
+            "vlm_timeout_s": key_payload.get("vlm_timeout_s"),
+            "K_uncertainty": int(K),
+            "prompt_mode": key_payload.get("prompt_mode"),
+            "prompt_signature": prompt_signature,
+            "label_counts": {str(int(k)): int(v) for k, v in sorted(counts.items(), key=lambda kv: int(kv[0]))},
+            "total_samples": int(total),
+            "uncertainty": float(uncertainty_val),
+            "entropy": float(entropy),
+            "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        _append_uncertainty_cache_entry(cache_path, entry)
+
+    return image_counts
 
 def uncertainty(
     x: Union[Image, List[Image]],
@@ -823,7 +1034,7 @@ def uncertainty(
     Supports batch processing.
     """
     is_batch = isinstance(x, list)
-    image_predictions = _stochastic_label_samples(
+    image_counts = _stochastic_label_counts(
         x=x,
         system_prompt_1=system_prompt_1,
         system_prompt_2=system_prompt_2,
@@ -833,13 +1044,13 @@ def uncertainty(
     )
 
     uncertainties = []
-    for labels in image_predictions:
-        if not labels:
+    for counts in image_counts:
+        total = int(sum(counts.values()))
+        if total <= 0:
             uncertainties.append(0.0)
             continue
-        counts = Counter(labels)
         freq_max = max(counts.values())
-        uncertainties.append(1.0 - freq_max / len(labels))
+        uncertainties.append(1.0 - (float(freq_max) / float(total)))
         
     if is_batch:
         return uncertainties
@@ -861,7 +1072,7 @@ def entropy_uncertainty(
     Supports batch processing.
     """
     is_batch = isinstance(x, list)
-    image_predictions = _stochastic_label_samples(
+    image_counts = _stochastic_label_counts(
         x=x,
         system_prompt_1=system_prompt_1,
         system_prompt_2=system_prompt_2,
@@ -871,12 +1082,12 @@ def entropy_uncertainty(
     )
 
     entropy_scores: List[float] = []
-    for labels in image_predictions:
-        if not labels:
+    for counts in image_counts:
+        total = int(sum(counts.values()))
+        if total <= 0:
             entropy_scores.append(0.0)
             continue
-        counts = Counter(labels)
-        denom = float(len(labels))
+        denom = float(total)
         probs = [float(v) / denom for v in counts.values() if v > 0]
         h = -sum(p * np.log(p) for p in probs)
         entropy_scores.append(float(h))
@@ -2921,6 +3132,10 @@ class APTMDL:
                     processed_count += 1
 
             print(f"Already processed: {processed_count}/{len(all_candidates)}")
+            selection_gen_kwargs = dict(gen_kwargs)
+            selection_gen_kwargs["round_num"] = int(r)
+            if selection_gen_kwargs.get("fold", None) is None and self.fold is not None:
+                selection_gen_kwargs["fold"] = int(self.fold)
 
             if self.selection_method == "dts":
                 # DTS scores are not independent per item, so rebuild candidate_scores from scratch.
@@ -2981,7 +3196,7 @@ class APTMDL:
                             K=self.K_uncertainty,
                             alpha=self.alpha,
                             beta=self.beta,
-                            **gen_kwargs
+                            **selection_gen_kwargs
                         )
                         # Update entry and list
                         entry["score"] = s_x
@@ -3010,7 +3225,7 @@ class APTMDL:
                             self.S_2_template,
                             self.prompt_set,
                             K=self.K_uncertainty,
-                            **gen_kwargs,
+                            **selection_gen_kwargs,
                         )
                         entry["score"] = s_x
                         candidate_scores.append((s_x, item))
@@ -4079,6 +4294,8 @@ def parse_arguments():
                         help="Batch size for VLM calls inside oracle_label_and_edit.")
     parser.add_argument("--vlm_timeout_s", type=float, default=120.0,
                         help="Per-request timeout (seconds) for VLM API calls.")
+    parser.add_argument("--uncertainty_cache_path", type=str, default="logs/uncertainty_cache.jsonl",
+                        help="Path to shared JSONL cache for stochastic label counts used by MDL/entropy.")
 
     # VLM generation parameters (passed as gen_kwargs)
     parser.add_argument("--model", type=str, default="gpt-4o",
@@ -4279,6 +4496,7 @@ if __name__ == "__main__":
             selection_batch_size=args.selection_batch_size,
             vlm_query_batch_size=args.vlm_query_batch_size,
             vlm_timeout_s=args.vlm_timeout_s,
+            uncertainty_cache_path=args.uncertainty_cache_path,
             model=args.model,
             temperature=args.temperature,
             max_tokens=args.max_tokens,
@@ -4296,5 +4514,6 @@ if __name__ == "__main__":
             results_root=args.results_root,
             oracle_script_path=args.oracle_script_path,
             oracle_dataset_name=args.oracle_dataset_name,
-            prompts_root=args.prompts_root
+            prompts_root=args.prompts_root,
+            fold=fold_num,
         )
