@@ -32,12 +32,18 @@ class CLIPImageEmbedder:
         self.backend = None
 
     def _ensure_loaded(self):
-        if self.model is not None and self.processor is not None:
+        # open_clip backends expose `preprocess` (not HF `processor`), while
+        # transformers backends expose `processor`.
+        if self.model is not None and (self.processor is not None or self.preprocess is not None):
             return
 
         try:
             import torch
             from transformers import AutoModel, AutoProcessor
+            try:
+                from transformers import AutoImageProcessor
+            except Exception:
+                AutoImageProcessor = None
         except ImportError as e:
             raise ImportError(
                 "DTS selection requires torch and transformers. "
@@ -47,8 +53,10 @@ class CLIPImageEmbedder:
         if self.device is None:
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
+        model_name_lc = str(self.model_name).strip().lower()
+
         # BiomedCLIP is most reliable via open_clip + HF hub weights.
-        if str(self.model_name).strip().lower() == "microsoft/biomedclip-pubmedbert_256-vit_base_patch16_224":
+        if model_name_lc == "microsoft/biomedclip-pubmedbert_256-vit_base_patch16_224":
             try:
                 import open_clip
             except ImportError as e:
@@ -77,13 +85,25 @@ class CLIPImageEmbedder:
             self.torch = torch
             return
 
+        # Phikon-v2 requires CLS token extraction from last_hidden_state.
+        if model_name_lc == "owkin/phikon-v2":
+            processor_cls = AutoImageProcessor if AutoImageProcessor is not None else AutoProcessor
+            self.processor = processor_cls.from_pretrained(self.model_name, trust_remote_code=True)
+            self.model = AutoModel.from_pretrained(self.model_name, trust_remote_code=True).to(self.device)
+            self.loaded_model_name = self.model_name
+            self.backend = "phikonv2"
+            self.model.eval()
+            self.torch = torch
+            return
+
+        # Do not silently switch to a different embedding model on load failure.
+        # If a model is requested explicitly, fail fast so experiment semantics remain correct.
         candidates = [self.model_name]
-        if self.model_name != "openai/clip-vit-base-patch32":
-            # Robust fallback for environments where BiomedCLIP processor metadata is unavailable.
-            candidates.append("openai/clip-vit-base-patch32")
 
         load_errors = []
         for candidate in candidates:
+            candidate_lc = str(candidate).strip().lower()
+            is_siglip_family = "siglip" in candidate_lc
             try:
                 # Prefer generic auto classes for compatibility with BiomedCLIP variants.
                 self.processor = AutoProcessor.from_pretrained(candidate, trust_remote_code=True)
@@ -92,6 +112,10 @@ class CLIPImageEmbedder:
                 self.backend = "transformers"
                 break
             except Exception as auto_err:
+                if is_siglip_family:
+                    # Do not force SigLIP checkpoints through CLIPModel; incompatible architectures.
+                    load_errors.append(f"{candidate} -> Auto load error: {auto_err}")
+                    continue
                 try:
                     from transformers import CLIPImageProcessor, CLIPModel
 
@@ -113,11 +137,6 @@ class CLIPImageEmbedder:
                 f"Tried: {candidates}. Details: {joined}"
             )
 
-        if self.loaded_model_name and self.loaded_model_name != self.model_name:
-            print(
-                f"Warning: DTS embedding model '{self.model_name}' failed to load; "
-                f"falling back to '{self.loaded_model_name}'."
-            )
         self.model.eval()
         self.torch = torch
 
@@ -139,6 +158,18 @@ class CLIPImageEmbedder:
                     image_tensors = [self.preprocess(img) for img in images]
                     image_batch = self.torch.stack(image_tensors).to(self.device)
                     image_features = self.model.encode_image(image_batch)
+                elif self.backend == "phikonv2":
+                    inputs = self.processor(images=images, return_tensors="pt")
+                    inputs = {k: v.to(self.device) for k, v in inputs.items()}
+                    outputs = self.model(**inputs)
+                    if hasattr(outputs, "last_hidden_state"):
+                        image_features = outputs.last_hidden_state[:, 0, :]
+                    elif hasattr(outputs, "pooler_output"):
+                        image_features = outputs.pooler_output
+                    else:
+                        raise RuntimeError(
+                            "Unsupported embedding output format from model: owkin/phikon-v2"
+                        )
                 else:
                     inputs = self.processor(images=images, return_tensors="pt")
                     inputs = {k: v.to(self.device) for k, v in inputs.items()}

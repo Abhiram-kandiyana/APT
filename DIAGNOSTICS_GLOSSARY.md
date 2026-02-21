@@ -17,6 +17,46 @@ This document defines the diagnostics terms and plots produced by APT-DTS.
 - `c_tiny`: Maximum selected samples allowed from one tiny basin.
 - `max_per_basin`: Per-basin diversity cap used in selection.
 
+## Selection Hyperparameters and Defaults
+
+### Shared Selection Controls
+| Hyperparameter | Default | Description |
+|---|---:|---|
+| `selection_method` | required (`mdl` or `dts`) | Chooses active-set scoring strategy. |
+| `candidate_pool_size` | `None` (treated as full pool; same as `-1`) | Number of unlabeled candidates sampled each round before scoring. |
+| `initial_batch_size` | `10` | Number of samples selected each round (`b`). |
+| `max_rounds` | `20` | Maximum active learning rounds. |
+| `stopping_accuracy` | `90.0` | Stop when validation average class accuracy (%) reaches this threshold. |
+
+### DTS-Specific
+| Hyperparameter | Default | Description |
+|---|---:|---|
+| `dts_k` | `60` | kNN size used to build DTS neighborhood graph. |
+| `dts_k_rho` | `30` | Neighbor count used for local density estimate `rho`. |
+| `dts_k_t` | `20` | Neighbor rank used for local threshold radius `t_i`. |
+| `dts_k_b` | `15` | Neighbor count used in boundary score computation. |
+| `dts_mutual_knn` | `False` | Use hybrid mutual-kNN for parent links and boundary scoring. |
+| `dts_mcluster_min` | `20` | Basin size threshold below which basins are treated as tiny. |
+| `dts_c_tiny` | `1` | Max selections allowed per tiny basin. |
+| `dts_max_per_basin` | `2` | Diversity cap per basin during selection. |
+| `dts_deg_min_tiny` | `10` | Tiny-basin fallback gate: minimum mutual degree. |
+| `dts_b_min_tiny` | `0.6` | Tiny-basin fallback gate: minimum boundary score. |
+| `dts_tune_hparams` | `True` | Enables diagnostics-driven hyperparameter tuning. |
+| `dts_clip_model_alias` | `biomedclip` | Embedding model alias used by DTS encoder (`biomedclip`, `clip`, `phikonv2`, `medsiglip`). |
+| `clip_batch_size` | `32` | Image embedding batch size for DTS encoder. |
+
+### MDL-Specific
+| Hyperparameter | Default | Description |
+|---|---:|---|
+| `alpha` | `0.01` | Weight on caption length in caption complexity. |
+| `beta` | `0.1` | Weight on redundancy in caption complexity. |
+| `lambda_mdl` | `0.1` | MDL objective trade-off between error and description length. |
+| `lambda_c` | `0.5` | Selection-score trade-off between uncertainty and ECC. |
+| `K_uncertainty` | `5` | Number of stochastic VLM calls for uncertainty estimation. |
+| `mdl_tol` | `1e-3` | Convergence tolerance for MDL optimization. |
+| `selection_batch_size` | `5` | VLM batch size during sample selection scoring. |
+| `val_batch_size` | `5` | VLM batch size during validation scoring. |
+
 ## Degree / Basin / Boundary Metrics
 - `deg_mut_min`: Minimum mutual-kNN degree in pool.
 - `deg_mut_p10`: 10th percentile of mutual-kNN degree.
@@ -49,12 +89,20 @@ This document defines the diagnostics terms and plots produced by APT-DTS.
 
 ## Trigger Definitions
 A trigger fires when its condition is true:
-- `overmerged`: `C < 5` OR `basin_max_size/N > 0.60` OR `mass_top5_frac > 0.85`
-- `fragmented`: `C > 80` OR `basin_median_size < 10` OR `singleton_frac > 0.30` OR `tiny_frac > 0.40`
-- `mutual_sparse`: `deg_mut_p10 < 10` OR `deg_mut_min < 5`
+- `overmerged`:
+  - Large pools (`N_pool > 150`): `C < 5` OR `basin_max_size/N > 0.60` OR `mass_top5_frac > 0.85`
+  - Small pools (`N_pool <= 150`): `C < round(0.04*N_pool)` (min 3) OR `basin_max_size/N > 0.70` OR `mass_top5_frac > 0.92`
+- `fragmented`:
+  - Large pools (`N_pool > 150`): `C > 80` OR `basin_median_size < 10` OR `singleton_frac > 0.30` OR `tiny_frac > 0.40`
+  - Small pools (`N_pool <= 150`): `C > round(0.70*N_pool)` (min 50) OR `basin_median_size < 6` OR `singleton_frac > 0.45` OR `tiny_frac > 0.60`
+- `mutual_sparse`:
+  - Large pools (`N_pool > 150`): `deg_mut_p10 < 10` OR `deg_mut_min < 5`
+  - Small pools (`N_pool <= 150`): `deg_mut_p10 < ceil(0.35*k_effective)` (min 4) OR `deg_mut_min < ceil(0.15*k_effective)` (min 2)
 - `outlier_heavy`: `selected_outlier_flag_count >= 3` OR `selected_tiny_basin_count >= 3`
 - `boundary_flat`: `b_std < 0.05` OR `b_p99_minus_p95 < 0.05` OR `std(selected_boundary_scores) < 0.03`
-- `diversity_low`: `selected_unique_basins <= 3`
+- `diversity_low`:
+  - Large pools (`N_pool > 150`): `selected_unique_basins < 4`
+  - Small pools (`N_pool <= 150`): `selected_unique_basins < ceil(0.25*b)` (min 3)
 
 ## Plot Guide
 

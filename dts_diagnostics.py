@@ -120,6 +120,60 @@ class DiagnosticsAndTuner:
         self.clip_batch_size = int(clip_batch_size)
         self.use_mutual_knn = bool(use_mutual_knn)
 
+    def _compute_health_trigger_thresholds(
+        self,
+        n_pool: int,
+        batch_size: int,
+        k_effective: int,
+    ) -> Dict[str, float]:
+        n_pool = max(1, int(n_pool))
+        batch_size = max(1, int(batch_size))
+        k_effective = max(1, int(k_effective))
+
+        # Retune trigger sensitivity for smaller candidate pools (e.g., N_pool ~= 100).
+        small_pool = n_pool <= 150
+        if small_pool:
+            c_overmerged_min = max(3, int(round(0.04 * n_pool)))
+            top1_basin_frac_max = 0.70
+            top5_basin_frac_max = 0.92
+
+            c_fragmented_max = max(50, int(round(0.70 * n_pool)))
+            basin_median_size_min = 6.0
+            singleton_frac_max = 0.45
+            tiny_frac_max = 0.60
+
+            deg_mut_p10_min = max(4, int(math.ceil(0.35 * k_effective)))
+            deg_mut_min_min = max(2, int(math.ceil(0.15 * k_effective)))
+
+            diversity_min_unique_basins = max(3, int(math.ceil(0.25 * batch_size)))
+        else:
+            c_overmerged_min = 5
+            top1_basin_frac_max = 0.60
+            top5_basin_frac_max = 0.85
+
+            c_fragmented_max = 80
+            basin_median_size_min = 10.0
+            singleton_frac_max = 0.30
+            tiny_frac_max = 0.40
+
+            deg_mut_p10_min = 10
+            deg_mut_min_min = 5
+
+            diversity_min_unique_basins = 4
+
+        return {
+            "c_overmerged_min": int(c_overmerged_min),
+            "top1_basin_frac_max": float(top1_basin_frac_max),
+            "top5_basin_frac_max": float(top5_basin_frac_max),
+            "c_fragmented_max": int(c_fragmented_max),
+            "basin_median_size_min": float(basin_median_size_min),
+            "singleton_frac_max": float(singleton_frac_max),
+            "tiny_frac_max": float(tiny_frac_max),
+            "deg_mut_p10_min": int(deg_mut_p10_min),
+            "deg_mut_min_min": int(deg_mut_min_min),
+            "diversity_min_unique_basins": int(diversity_min_unique_basins),
+        }
+
     def analyze_round(
         self,
         round_index: int,
@@ -322,14 +376,34 @@ class DiagnosticsAndTuner:
         else:
             corr_deg_mut_singleton = 0.0
 
+        top1_basin_frac = float(basin_max_size / max(n_pool, 1))
+        k_effective = int(mutual_mask.shape[1]) if mutual_mask.ndim == 2 else 1
+        thresholds = self._compute_health_trigger_thresholds(
+            n_pool=int(n_pool),
+            batch_size=int(batch_size),
+            k_effective=int(k_effective),
+        )
+
         checks = {
-            "overmerged": bool((c_basins < 5) or ((basin_max_size / max(n_pool, 1)) > 0.60) or (mass_top5_frac > 0.85)),
-            "fragmented": bool((c_basins > 80) or (basin_median_size < 10) or (singleton_frac > 0.30) or (tiny_frac > 0.40)),
-            "giant_and_dust": bool((basin_max_size / max(n_pool, 1)) >= 0.50 and singleton_frac >= 0.40),
-            "mutual_sparse": bool((deg_mut_p10 < 10) or (deg_mut_min < 5)),
+            "overmerged": bool(
+                (c_basins < int(thresholds["c_overmerged_min"]))
+                or (top1_basin_frac > float(thresholds["top1_basin_frac_max"]))
+                or (mass_top5_frac > float(thresholds["top5_basin_frac_max"]))
+            ),
+            "fragmented": bool(
+                (c_basins > int(thresholds["c_fragmented_max"]))
+                or (basin_median_size < float(thresholds["basin_median_size_min"]))
+                or (singleton_frac > float(thresholds["singleton_frac_max"]))
+                or (tiny_frac > float(thresholds["tiny_frac_max"]))
+            ),
+            "giant_and_dust": bool((top1_basin_frac >= 0.50) and (singleton_frac >= 0.40)),
+            "mutual_sparse": bool(
+                (deg_mut_p10 < float(thresholds["deg_mut_p10_min"]))
+                or (deg_mut_min < int(thresholds["deg_mut_min_min"]))
+            ),
             "outlier_heavy": bool((selected_outlier_flag_count >= 3) or (selected_tiny_basin_count >= 3)),
             "boundary_flat": bool((b_std < 0.05) or (b_p99_minus_p95 < 0.05) or (selected_boundary_std < 0.03)),
-            "diversity_low": bool(selected_unique_basins_eff <= 3),
+            "diversity_low": bool(selected_unique_basins_eff < int(thresholds["diversity_min_unique_basins"])),
         }
 
         updated_hparams, tuning_actions, updated_state, tuner_decision = self._tune_hyperparameters(
@@ -381,7 +455,7 @@ class DiagnosticsAndTuner:
             "tiny_frac": float(tiny_frac),
             "points_tiny_frac": float(points_tiny_frac),
             "mass_top5_frac": float(mass_top5_frac),
-            "top1_basin_frac": float(basin_max_size / max(n_pool, 1)),
+            "top1_basin_frac": float(top1_basin_frac),
             "top5_basin_frac": float(mass_top5_frac),
             "top1_basin_id": int(top1_basin_id),
             "top5_basin_ids": [int(x) for x in top5_basin_ids],
@@ -442,6 +516,7 @@ class DiagnosticsAndTuner:
             "selected_outlier_flag_count": int(selected_outlier_flag_count),
             "health_checks": checks,
             "triggers": checks,
+            "trigger_thresholds": thresholds,
             "tuning_actions": tuning_actions,
             "tuner_decision": tuner_decision,
             "next_hyperparameters": updated_hparams,

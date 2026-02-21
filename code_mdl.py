@@ -39,6 +39,8 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 DTS_CLIP_MODEL_ALIASES: Dict[str, str] = {
     "biomedclip": "microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224",
     "clip": "openai/clip-vit-base-patch32",
+    "phikonv2": "owkin/phikon-v2",
+    "medsiglip": "google/medsiglip-448",
 }
 DEFAULT_DTS_CLIP_MODEL_ALIAS = "biomedclip"
 DEFAULT_DTS_CLIP_MODEL_NAME = DTS_CLIP_MODEL_ALIASES["biomedclip"]
@@ -74,7 +76,7 @@ def load_files(file_path: str) -> str:
 
 def with_selection_suffix(file_path: str, selection_method: str) -> str:
     """
-    Add the selection method to artifact filenames to avoid MDL/DTS collisions.
+    Add the selection method to artifact filenames to avoid method collisions.
     Example: logs/vlm_logs.json -> logs/vlm_logs_mdl.json
     """
     if not file_path:
@@ -94,24 +96,47 @@ def _safe_path_token(value: Any, default: str = "unknown") -> str:
     token = str(value).strip() if value is not None else ""
     if not token:
         token = default
-    token = re.sub(r"[^A-Za-z0-9._-]+", "_", token)
+    token = re.sub(r"[^A-Za-z0-9._=-]+", "_", token)
     token = token.strip("._-")
     return token or default
 
 
-def _selection_artifact_token(selection_method: str, dts_clip_model_name: Optional[str] = None) -> str:
+def _selection_artifact_token(
+    selection_method: str,
+    dts_clip_model_name: Optional[str] = None,
+    active_set_batch_size: Optional[int] = None,
+    candidate_pool_size: Optional[int] = None,
+) -> str:
     selection = str(selection_method or "mdl").lower().strip()
     if selection != "dts":
         return _safe_path_token(selection, default="mdl")
 
+    batch_token = ""
+    try:
+        b = int(active_set_batch_size) if active_set_batch_size is not None else None
+        if b is not None and b > 0:
+            batch_token = f"_b={b}"
+    except (TypeError, ValueError):
+        batch_token = ""
+    cand_token = ""
+    try:
+        c = int(candidate_pool_size) if candidate_pool_size is not None else -1
+        cand_token = f"_candidate-size={c}"
+    except (TypeError, ValueError):
+        cand_token = ""
+
     model_alias = _dts_clip_model_alias(dts_clip_model_name)
     if model_alias == "biomedclip":
-        return "dts_biomedclip"
+        return f"dts_biomedclip{batch_token}{cand_token}"
     if model_alias == "clip":
-        return "dts_clip"
+        return f"dts_clip{batch_token}{cand_token}"
+    if model_alias == "phikonv2":
+        return f"dts_phikonv2{batch_token}{cand_token}"
+    if model_alias == "medsiglip":
+        return f"dts_medsiglip{batch_token}{cand_token}"
 
     model_name = str(dts_clip_model_name or "").strip().lower()
-    return f"dts_{_safe_path_token(model_name or 'clip', default='clip')}"
+    return f"dts_{_safe_path_token(model_name or 'clip', default='clip')}{batch_token}{cand_token}"
 
 
 def _dts_clip_model_alias(dts_clip_model_name: Optional[str]) -> Optional[str]:
@@ -265,18 +290,18 @@ def build_round_prompt_paths(
 ) -> Tuple[str, str]:
     """
     Build per-round prompt artifact paths:
-    prompt_sets/<dataset>/fold-<fold>/fold<fold>_round<round>_prompts_<selection>.json
-    prompt_sets/<dataset>/fold-<fold>/fold<fold>_round<round>_prompts_<selection>_corrected.json
+    prompt_sets/<dataset>/fold-<fold>_<selection>/fold<fold>_round<round>_prompts_<selection>.json
+    prompt_sets/<dataset>/fold-<fold>_<selection>/fold<fold>_round<round>_prompts_<selection>_corrected.json
     """
     round_token = str(round_num)
     dataset_token = _safe_path_token(dataset_name, default="dataset")
     fold_token = _safe_path_token(fold, default="na")
-    fold_dir = os.path.join(prompts_root, dataset_token, f"fold-{fold_token}")
-    os.makedirs(fold_dir, exist_ok=True)
     selection_token = _safe_path_token(
         (selection_method or "mdl").lower().strip(),
         default="mdl",
     )
+    fold_dir = os.path.join(prompts_root, dataset_token, f"fold-{fold_token}_{selection_token}")
+    os.makedirs(fold_dir, exist_ok=True)
 
     if fold is not None:
         stem = f"fold{fold}_round{round_token}_prompts"
@@ -461,6 +486,7 @@ def vlm_query(
     temperature = gen_kwargs.get("temperature", 1)
     max_tokens = gen_kwargs.get("max_tokens", 1000)
     top_p = gen_kwargs.get("top_p", 1.0)
+    request_timeout_s = float(gen_kwargs.get("vlm_timeout_s", 120))
 
     max_retries = 5
     retry_count = 0
@@ -472,6 +498,7 @@ def vlm_query(
                 messages=[{"role": "user", "content": content}],
                 temperature=temperature,
                 max_tokens=max_tokens,
+                timeout=request_timeout_s,
             )
             output_text = response.choices[0].message.content
             lower_stripped = output_text.lower().strip()
@@ -505,14 +532,17 @@ def vlm_query(
                 return parsed_results[0]
                 
         except Exception as e:
-            print(f"Error calling VLM: {e}")
+            print(f"Error calling VLM (attempt {retry_count + 1}/{max_retries}): {e}")
             retry_count += 1
             time.sleep(2)
             
-    # If retries exhausted, return default values
-    print(f"Max retries ({max_retries}) exhausted. Defaulting to class 0 and default explanation.")
-    default_label = 0
-    default_rationale = "Cellular organization is compact with dense arrangement. The layering pattern is well-defined and normal. Purkinje cell layer appear prominent. The granule cell layer is thick with high cell density. Overall structure shows continuity, and the staining pattern has uniform intensity."
+    # If retries exhausted, return invalid prediction so metrics can ignore it.
+    print(f"Max retries ({max_retries}) exhausted. Returning invalid label -1.")
+    default_label = -1
+    default_rationale = (
+        "Unable to get a classification from the model even after multiple retries. "
+        "This prediction is marked invalid and should be excluded from accuracy metrics."
+    )
     default_results = [(default_label, default_rationale) for _ in images]
     
     # Log default response if path provided
@@ -733,6 +763,53 @@ def get_stochastic_params(K: int) -> List[Tuple[float, float]]:
          
     return params
 
+def _stochastic_label_samples(
+    x: Union[Image, List[Image]],
+    system_prompt_1: str,
+    system_prompt_2: str,
+    prompt_set: PromptSet,
+    K: int = 5,
+    **gen_kwargs
+) -> List[List[int]]:
+    """
+    Collect K stochastic predicted labels per image.
+    Returns a list where each entry is [pred_1, ..., pred_K] for one image.
+    """
+    images = x if isinstance(x, list) else [x]
+    image_predictions: List[List[int]] = [[] for _ in images]
+
+    cached_preds = {}
+    if gen_kwargs.get("debug", False):
+        cached_preds = load_cached_preds(gen_kwargs)
+
+    for _ in range(K):
+        batch_to_query = []
+        indices_to_query = []
+        current_preds: List[Optional[int]] = [None] * len(images)
+
+        for idx, img in enumerate(images):
+            if str(img) in cached_preds:
+                current_preds[idx] = int(cached_preds[str(img)]["label"])
+            else:
+                batch_to_query.append(img)
+                indices_to_query.append(idx)
+
+        if batch_to_query:
+            results = vlm_query(
+                batch_to_query, system_prompt_1, system_prompt_2, prompt_set,
+                stochastic=True,
+                **gen_kwargs
+            )
+            for idx, (y_hat, _) in zip(indices_to_query, results):
+                current_preds[idx] = int(y_hat)
+
+        for idx, pred in enumerate(current_preds):
+            if pred is None:
+                raise RuntimeError("Missing stochastic prediction for uncertainty estimation.")
+            image_predictions[idx].append(int(pred))
+
+    return image_predictions
+
 def uncertainty(
     x: Union[Image, List[Image]],
     system_prompt_1: str,
@@ -746,49 +823,67 @@ def uncertainty(
     Supports batch processing.
     """
     is_batch = isinstance(x, list)
-    images = x if is_batch else [x]
-    
-    # image_predictions[img_idx] = [pred1, pred2, ..., predK]
-    image_predictions = [[] for _ in images]
-    
-    cached_preds = {}
-    if gen_kwargs.get("debug", False):
-        cached_preds = load_cached_preds(gen_kwargs)
-
-    for i in range(K):
-        batch_to_query = []
-        indices_to_query = []
-        current_preds = [None] * len(images)
-        
-        for idx, img in enumerate(images):
-            if str(img) in cached_preds:
-                current_preds[idx] = int(cached_preds[str(img)]['label'])
-            else:
-                batch_to_query.append(img)
-                indices_to_query.append(idx)
-        
-        if batch_to_query:
-            results = vlm_query(
-                batch_to_query, system_prompt_1, system_prompt_2, prompt_set,
-                stochastic=True,
-                **gen_kwargs
-            )
-            for idx, (y_hat, _) in zip(indices_to_query, results):
-                current_preds[idx] = int(y_hat)
-        
-        for idx, pred in enumerate(current_preds):
-            image_predictions[idx].append(pred)
+    image_predictions = _stochastic_label_samples(
+        x=x,
+        system_prompt_1=system_prompt_1,
+        system_prompt_2=system_prompt_2,
+        prompt_set=prompt_set,
+        K=K,
+        **gen_kwargs,
+    )
 
     uncertainties = []
     for labels in image_predictions:
+        if not labels:
+            uncertainties.append(0.0)
+            continue
         counts = Counter(labels)
         freq_max = max(counts.values())
-        uncertainties.append(1.0 - freq_max / K)
+        uncertainties.append(1.0 - freq_max / len(labels))
         
     if is_batch:
         return uncertainties
     else:
         return uncertainties[0]
+
+
+def entropy_uncertainty(
+    x: Union[Image, List[Image]],
+    system_prompt_1: str,
+    system_prompt_2: str,
+    prompt_set: PromptSet,
+    K: int = 5,
+    **gen_kwargs
+) -> Union[float, List[float]]:
+    """
+    u_ent(x;P) = H(p_hat(.|x)) using K stochastic calls, where:
+    H(p) = -sum_k p_k log p_k.
+    Supports batch processing.
+    """
+    is_batch = isinstance(x, list)
+    image_predictions = _stochastic_label_samples(
+        x=x,
+        system_prompt_1=system_prompt_1,
+        system_prompt_2=system_prompt_2,
+        prompt_set=prompt_set,
+        K=K,
+        **gen_kwargs,
+    )
+
+    entropy_scores: List[float] = []
+    for labels in image_predictions:
+        if not labels:
+            entropy_scores.append(0.0)
+            continue
+        counts = Counter(labels)
+        denom = float(len(labels))
+        probs = [float(v) / denom for v in counts.values() if v > 0]
+        h = -sum(p * np.log(p) for p in probs)
+        entropy_scores.append(float(h))
+
+    if is_batch:
+        return entropy_scores
+    return entropy_scores[0]
 
 
 # ============================================================
@@ -1021,6 +1116,7 @@ class APTMDL:
         logs_dir: str = "logs",
         fold: int = None,
         stopping_accuracy: float = 90.0,
+        active_set_batch_size: Optional[int] = None,
     ):
         self.S_1 = load_files(system_prompt_1_path)
         # System prompt 2 is now a template string handled in code, not loaded from file
@@ -1030,9 +1126,10 @@ class APTMDL:
         self.lambda_mdl = lambda_mdl
         self.lambda_c = lambda_c
         self.K_uncertainty = K_uncertainty
-        # Explicit strategy switch: "mdl" keeps legacy scoring, "dts" uses CLIP+density-tree.
+        # Explicit strategy switch:
+        # "mdl" keeps legacy MDL score, "entropy" uses Shannon entropy, "dts" uses CLIP+density-tree.
         self.selection_method = selection_method.lower()
-        if self.selection_method not in ("mdl", "dts"):
+        if self.selection_method not in ("mdl", "entropy", "dts"):
             raise ValueError(f"Unsupported selection_method: {selection_method}")
         self.mdl_tol = mdl_tol
         self.max_rounds = max_rounds
@@ -1052,6 +1149,8 @@ class APTMDL:
         self.selection_artifact_token = _selection_artifact_token(
             selection_method=self.selection_method,
             dts_clip_model_name=self.dts_clip_model_name,
+            active_set_batch_size=active_set_batch_size,
+            candidate_pool_size=self.candidate_pool_size,
         )
         self.dts_tuner_state = {
             "overmerged_streak": 0,
@@ -1222,7 +1321,7 @@ class APTMDL:
             dataset_name=dataset_name,
             fold=fold,
             round_num=round_num,
-            selection_method=self.selection_method,
+            selection_method=self.selection_artifact_token,
         )
 
         prompt_items = []
@@ -1350,7 +1449,7 @@ class APTMDL:
                 prompts_root=str(prompts_root),
                 dataset_name=str(dataset_name),
                 fold=fold,
-                selection_method=self.selection_method,
+                selection_method=self.selection_artifact_token,
                 label_map=list(label_map or []),
             )
             if global_prompts_path:
@@ -1460,8 +1559,8 @@ class APTMDL:
         # Convert prompt_set and unlabeled_data to serializable format
         # prompt_set is saved as a list of dictionaries: {"image_path": path, "caption": caption}
         # unlabeled_data is saved as a list of tuples: (image_path, label)
-        
-        state = {
+
+        round_state = {
             "round": round_num,
             "validation_avg_class_accuracy": validation_avg_class_accuracy,
             "selection_method": self.selection_method,
@@ -1469,7 +1568,7 @@ class APTMDL:
             "unlabeled_data": [(str(x), l) for x, l in self.unlabeled_data]
         }
         if self.selection_method == "dts":
-            state["dts_hyperparameters"] = {
+            round_state["dts_hyperparameters"] = {
                 "k": int(self.dts_k),
                 "k_rho": int(self.dts_k_rho),
                 "k_t": int(self.dts_k_t),
@@ -1481,7 +1580,7 @@ class APTMDL:
                 "b_min_tiny": float(self.dts_b_min_tiny),
                 "tune_hparams": bool(self.dts_tune_hparams),
             }
-            state["dts_tuner_state"] = {
+            round_state["dts_tuner_state"] = {
                 "overmerged_streak": int(self.dts_tuner_state.get("overmerged_streak", 0)),
                 "fragmented_streak": int(self.dts_tuner_state.get("fragmented_streak", 0)),
                 "boundary_flat_streak": int(self.dts_tuner_state.get("boundary_flat_streak", 0)),
@@ -1497,6 +1596,50 @@ class APTMDL:
             checkpoint_dir = os.path.dirname(checkpoint_path)
             if checkpoint_dir and not os.path.exists(checkpoint_dir):
                 os.makedirs(checkpoint_dir, exist_ok=True)
+
+            existing_state: Dict[str, Any] = {}
+            if os.path.exists(checkpoint_path):
+                try:
+                    with open(checkpoint_path, "r", encoding="utf-8") as f:
+                        loaded = json.load(f)
+                    if isinstance(loaded, dict):
+                        existing_state = loaded
+                except Exception:
+                    existing_state = {}
+
+            round_history: Dict[str, Any] = {}
+            if isinstance(existing_state.get("round_history"), dict):
+                round_history = dict(existing_state["round_history"])
+            elif "round" in existing_state and "prompt_set" in existing_state and "unlabeled_data" in existing_state:
+                # Migrate legacy single-snapshot checkpoint into history.
+                try:
+                    legacy_round = int(existing_state.get("round"))
+                    round_history[str(legacy_round)] = {
+                        k: existing_state.get(k)
+                        for k in (
+                            "round",
+                            "validation_avg_class_accuracy",
+                            "selection_method",
+                            "prompt_set",
+                            "unlabeled_data",
+                            "dts_hyperparameters",
+                            "dts_tuner_state",
+                        )
+                        if k in existing_state
+                    }
+                except Exception:
+                    pass
+
+            now_ts = time.strftime("%Y-%m-%d %H:%M:%S")
+            round_entry = dict(round_state)
+            round_entry["saved_at"] = now_ts
+            round_history[str(int(round_num))] = round_entry
+
+            state = dict(round_state)
+            state["created_at"] = existing_state.get("created_at", now_ts)
+            state["updated_at"] = now_ts
+            state["latest_round"] = int(round_num)
+            state["round_history"] = round_history
 
             with open(checkpoint_path, 'w') as f:
                 json.dump(state, f, indent=4)
@@ -1523,16 +1666,53 @@ class APTMDL:
                     f"Checkpoint selection_method={checkpoint_method} does not match "
                     f"current selection_method={self.selection_method}."
                 )
-                
+
+            state_for_resume = state
+            round_history = state.get("round_history")
+            if isinstance(round_history, dict) and len(round_history) > 0:
+                latest_round_key = None
+                latest_round_num = None
+                try:
+                    candidate_keys = [k for k in round_history.keys() if str(k).strip() != ""]
+                    if candidate_keys:
+                        if state.get("latest_round") is not None:
+                            preferred = str(int(state.get("latest_round")))
+                            if preferred in round_history:
+                                latest_round_key = preferred
+                                latest_round_num = int(preferred)
+                        if latest_round_key is None:
+                            latest_round_num = max(int(k) for k in candidate_keys)
+                            latest_round_key = str(latest_round_num)
+                except Exception:
+                    latest_round_key = sorted(round_history.keys())[-1]
+                    try:
+                        latest_round_num = int(latest_round_key)
+                    except Exception:
+                        latest_round_num = None
+
+                if latest_round_key is not None and isinstance(round_history.get(latest_round_key), dict):
+                    state_for_resume = round_history[latest_round_key]
+                    if latest_round_num is not None:
+                        state_for_resume = dict(state_for_resume)
+                        state_for_resume.setdefault("round", int(latest_round_num))
+
             # Load prompt_set from list of dictionaries
-            self.prompt_set = [(item["image_path"], item["caption"]) for item in state["prompt_set"]]
-            self.unlabeled_data = [(x, l) for x, l in state["unlabeled_data"]]
+            prompt_state = state_for_resume.get("prompt_set", state.get("prompt_set", []))
+            unlabeled_state = state_for_resume.get("unlabeled_data", state.get("unlabeled_data", []))
+            self.prompt_set = [(item["image_path"], item["caption"]) for item in prompt_state]
+            self.unlabeled_data = [(x, l) for x, l in unlabeled_state]
 
             # Backward compatibility: if old checkpoint has mdl_loss only, return that fallback value.
-            last_validation_avg_class_accuracy = state.get("validation_avg_class_accuracy")
+            last_validation_avg_class_accuracy = state_for_resume.get(
+                "validation_avg_class_accuracy",
+                state.get("validation_avg_class_accuracy"),
+            )
             if last_validation_avg_class_accuracy is None:
                 # Backward compatibility with older checkpoints.
-                last_validation_avg_class_accuracy = state.get("active_set_accuracy")
+                last_validation_avg_class_accuracy = state_for_resume.get(
+                    "active_set_accuracy",
+                    state.get("active_set_accuracy"),
+                )
             if last_validation_avg_class_accuracy is None and "mdl_loss" in state:
                 try:
                     last_validation_avg_class_accuracy = float(state["mdl_loss"])
@@ -1540,7 +1720,10 @@ class APTMDL:
                     last_validation_avg_class_accuracy = None
 
             if self.selection_method == "dts":
-                dts_hparams = state.get("dts_hyperparameters", {})
+                dts_hparams = state_for_resume.get(
+                    "dts_hyperparameters",
+                    state.get("dts_hyperparameters", {}),
+                )
                 self.dts_k = int(dts_hparams.get("k", self.dts_k))
                 self.dts_k_rho = int(dts_hparams.get("k_rho", self.dts_k_rho))
                 self.dts_k_t = int(dts_hparams.get("k_t", self.dts_k_t))
@@ -1550,7 +1733,10 @@ class APTMDL:
                 self.dts_max_per_basin = int(dts_hparams.get("max_per_basin", self.dts_max_per_basin))
                 self.dts_deg_min_tiny = int(dts_hparams.get("deg_min_tiny", self.dts_deg_min_tiny))
                 self.dts_b_min_tiny = float(dts_hparams.get("b_min_tiny", self.dts_b_min_tiny))
-                saved_state = state.get("dts_tuner_state", {})
+                saved_state = state_for_resume.get(
+                    "dts_tuner_state",
+                    state.get("dts_tuner_state", {}),
+                )
                 self.dts_tuner_state = {
                     "overmerged_streak": int(saved_state.get("overmerged_streak", 0)),
                     "fragmented_streak": int(saved_state.get("fragmented_streak", 0)),
@@ -1562,9 +1748,10 @@ class APTMDL:
                     "prev_num_deg0": saved_state.get("prev_num_deg0"),
                     "prev_hparams": saved_state.get("prev_hparams"),
                 }
-            
-            print(f"Checkpoint loaded from {checkpoint_path}. Resuming from round {state['round'] + 1}")
-            return state["round"], last_validation_avg_class_accuracy
+
+            last_round = int(state_for_resume.get("round", state.get("round", 0)))
+            print(f"Checkpoint loaded from {checkpoint_path}. Resuming from round {last_round + 1}")
+            return last_round, last_validation_avg_class_accuracy
             
         except Exception as e:
             print(f"Error loading checkpoint: {e}")
@@ -1760,6 +1947,7 @@ class APTMDL:
         y_true_labels: List[int],
         y_pred_labels: List[Optional[int]],
         label_map: List[str],
+        ignore_invalid_predictions: bool = False,
     ) -> Dict[str, Any]:
         class_totals: Dict[str, int] = {str(lbl): 0 for lbl in label_map}
         class_correct: Dict[str, int] = {str(lbl): 0 for lbl in label_map}
@@ -1768,6 +1956,10 @@ class APTMDL:
 
         for img_path, y_true, y_pred in zip(image_paths, y_true_labels, y_pred_labels):
             if y_true is None or int(y_true) < 0 or int(y_true) >= len(label_map):
+                continue
+            if ignore_invalid_predictions and (
+                y_pred is None or int(y_pred) < 0 or int(y_pred) >= len(label_map)
+            ):
                 continue
             class_name = str(label_map[int(y_true)])
             class_totals[class_name] += 1
@@ -1963,7 +2155,7 @@ class APTMDL:
         dataset_token = _safe_path_token(dataset_name, default="dataset")
         fold_token = _safe_path_token(fold, default="na")
         selection_token = _safe_path_token((selection_method or self.selection_method), default="mdl")
-        fold_dir = os.path.join(prompts_root, dataset_token, f"fold-{fold_token}")
+        fold_dir = os.path.join(prompts_root, dataset_token, f"fold-{fold_token}_{selection_token}")
         os.makedirs(fold_dir, exist_ok=True)
 
         round_pattern = re.compile(
@@ -2073,19 +2265,123 @@ class APTMDL:
         if not eval_paths:
             return None
 
+        val_results_root = str(gen_kwargs.get("val_results_root", "val_results"))
+        dataset_token = _safe_path_token(gen_kwargs.get("dataset", "dataset"), default="dataset")
+        selection_token = _safe_path_token(self.selection_artifact_token, default="mdl")
+        fold_token = _safe_path_token(self.fold if self.fold is not None else gen_kwargs.get("fold"), default="na")
+        round_token = f"{int(round_num):02d}"
+        val_dir = os.path.join(val_results_root, dataset_token, f"selection_method={selection_token}")
+        os.makedirs(val_dir, exist_ok=True)
+        val_predictions_path = os.path.join(val_dir, f"fold-{fold_token}.json")
+        round_key = f"round_{round_token}"
+
+        val_payload: Dict[str, Any] = {}
+        if os.path.exists(val_predictions_path):
+            try:
+                with open(val_predictions_path, "r", encoding="utf-8") as f:
+                    existing = json.load(f)
+                if isinstance(existing, dict):
+                    val_payload = existing
+            except Exception:
+                val_payload = {}
+
+        val_payload.setdefault("dataset", str(gen_kwargs.get("dataset", "dataset")))
+        val_payload.setdefault("fold", fold_token)
+        val_payload.setdefault("selection_method", selection_token)
+        val_payload.setdefault("split", "validation")
+        val_payload.setdefault("round_predictions", {})
+
+        def _build_val_records(
+            current_preds: List[Optional[Tuple[Label, Caption]]],
+        ) -> List[Dict[str, Any]]:
+            records: List[Dict[str, Any]] = []
+            for image_path, y_true, pred_pair in zip(eval_paths, eval_labels, current_preds):
+                if pred_pair is None:
+                    continue
+                pred_raw = pred_pair[0] if isinstance(pred_pair, tuple) and len(pred_pair) > 0 else None
+                rationale = pred_pair[1] if isinstance(pred_pair, tuple) and len(pred_pair) > 1 else ""
+                y_true_idx = int(y_true)
+                y_pred = self._normalize_prediction_label(pred_raw, label_map)
+                y_pred_idx = int(y_pred) if y_pred is not None else None
+                pred_label_name = (
+                    str(label_map[y_pred_idx])
+                    if y_pred_idx is not None and 0 <= y_pred_idx < len(label_map)
+                    else "invalid"
+                )
+                records.append({
+                    "round": int(round_num),
+                    "image_path": str(image_path),
+                    "ground_truth_label_idx": y_true_idx,
+                    "ground_truth_label": str(label_map[y_true_idx]) if 0 <= y_true_idx < len(label_map) else None,
+                    "pred_label_raw": pred_raw,
+                    "pred_label_idx": y_pred_idx,
+                    "pred_label": pred_label_name,
+                    "caption": "" if rationale is None else str(rationale),
+                    "is_correct": bool(y_pred_idx == y_true_idx) if y_pred_idx is not None else False,
+                })
+            return records
+
+        def _persist_val_progress(records: List[Dict[str, Any]]) -> bool:
+            try:
+                val_payload["round_predictions"][round_key] = records
+                with open(val_predictions_path, "w", encoding="utf-8") as f:
+                    json.dump(val_payload, f, indent=2)
+                return True
+            except Exception as e:
+                print(f"Warning: failed to write validation predictions file: {e}")
+                return False
+
         query_batch_size = max(1, int(gen_kwargs.get("vlm_query_batch_size", 5)))
         eval_gen_kwargs = dict(gen_kwargs)
         # Ensure VLM parsing uses the same label mapping as validation ground truth.
         eval_gen_kwargs["label_map"] = list(label_map)
-        preds: List[Tuple[Label, Caption]] = []
-        num_batches = (len(eval_paths) + query_batch_size - 1) // query_batch_size
-        for i in tqdm(
-            range(0, len(eval_paths), query_batch_size),
-            total=num_batches,
+
+        preds: List[Optional[Tuple[Label, Caption]]] = [None] * len(eval_paths)
+        resume_eval = bool(gen_kwargs.get("resume", False))
+        resumed_count = 0
+        if resume_eval:
+            existing_records = val_payload.get("round_predictions", {}).get(round_key, [])
+            records_by_path: Dict[str, Dict[str, Any]] = {}
+            if isinstance(existing_records, list):
+                for rec in existing_records:
+                    if not isinstance(rec, dict):
+                        continue
+                    rec_path = rec.get("image_path")
+                    if not rec_path:
+                        continue
+                    records_by_path[os.path.abspath(str(rec_path))] = rec
+            for idx, image_path in enumerate(eval_paths):
+                rec = records_by_path.get(os.path.abspath(str(image_path)))
+                if not rec:
+                    continue
+                pred_raw = rec.get("pred_label_raw")
+                if pred_raw is None:
+                    pred_raw = rec.get("pred_label_idx")
+                if pred_raw is None:
+                    pred_raw = rec.get("pred_label")
+                rationale = rec.get("caption", "")
+                preds[idx] = (pred_raw, "" if rationale is None else str(rationale))
+                resumed_count += 1
+            if resumed_count > 0:
+                print(
+                    f"Validation r{int(round_num)}: resumed {resumed_count}/{len(eval_paths)} "
+                    f"predictions from {val_predictions_path}."
+                )
+
+        pending_indices = [idx for idx, pred in enumerate(preds) if pred is None]
+        pending_batches = (len(pending_indices) + query_batch_size - 1) // query_batch_size if pending_indices else 0
+        for start in tqdm(
+            range(0, len(pending_indices), query_batch_size),
+            total=pending_batches,
             desc=f"Validation r{int(round_num)}",
             leave=False,
         ):
-            batch_paths = eval_paths[i:i + query_batch_size]
+            batch_idx = (start // query_batch_size) + 1
+            print(
+                f"Validation r{int(round_num)} pending batch {batch_idx}/{pending_batches}..."
+            )
+            batch_indices = pending_indices[start:start + query_batch_size]
+            batch_paths = [eval_paths[idx] for idx in batch_indices]
             batch_preds = vlm_query(
                 batch_paths,
                 self.S_1,
@@ -2094,18 +2390,27 @@ class APTMDL:
                 stochastic=False,
                 **eval_gen_kwargs,
             )
-            if isinstance(batch_preds, list):
-                preds.extend(batch_preds)
-            else:
-                preds.append(batch_preds)
+            if not isinstance(batch_preds, list):
+                batch_preds = [batch_preds]
+            if len(batch_preds) != len(batch_indices):
+                print(
+                    f"Validation stopping check skipped: batch prediction mismatch "
+                    f"({len(batch_preds)} vs {len(batch_indices)})."
+                )
+                return None
+            for idx, pred_pair in zip(batch_indices, batch_preds):
+                preds[idx] = pred_pair
 
-        if len(preds) != len(eval_paths):
+            _persist_val_progress(_build_val_records(preds))
+
+        if any(pred is None for pred in preds):
             print(
                 f"Validation stopping check skipped: prediction count mismatch "
-                f"({len(preds)} vs {len(eval_paths)})."
+                f"({sum(1 for p in preds if p is not None)} vs {len(eval_paths)})."
             )
             return None
-        pred_labels = [self._normalize_prediction_label(p[0], label_map) for p in preds]
+        preds_final: List[Tuple[Label, Caption]] = [pred for pred in preds if pred is not None]
+        pred_labels = [self._normalize_prediction_label(p[0], label_map) for p in preds_final]
         predicted_per_class: Dict[str, int] = {str(lbl): 0 for lbl in label_map}
         predicted_per_class["unknown"] = 0
         for y_pred in pred_labels:
@@ -2119,55 +2424,11 @@ class APTMDL:
             y_true_labels=[int(y) for y in eval_labels],
             y_pred_labels=[int(y) if y is not None else None for y in pred_labels],
             label_map=list(label_map),
+            ignore_invalid_predictions=True,
         )
 
-        val_results_root = str(gen_kwargs.get("val_results_root", "val_results"))
-        dataset_token = _safe_path_token(gen_kwargs.get("dataset", "dataset"), default="dataset")
-        selection_token = _safe_path_token(self.selection_artifact_token, default="mdl")
-        fold_token = _safe_path_token(self.fold if self.fold is not None else gen_kwargs.get("fold"), default="na")
-        round_token = f"{int(round_num):02d}"
-        val_dir = os.path.join(val_results_root, dataset_token, f"selection_method={selection_token}")
-        os.makedirs(val_dir, exist_ok=True)
-        val_predictions_path = os.path.join(val_dir, f"fold-{fold_token}.json")
-
-        try:
-            records: List[Dict[str, Any]] = []
-            for image_path, y_true, pred_pair, y_pred in zip(eval_paths, eval_labels, preds, pred_labels):
-                pred_raw = pred_pair[0] if isinstance(pred_pair, tuple) and len(pred_pair) > 0 else None
-                rationale = pred_pair[1] if isinstance(pred_pair, tuple) and len(pred_pair) > 1 else ""
-                y_true_idx = int(y_true)
-                y_pred_idx = int(y_pred) if y_pred is not None else None
-                records.append({
-                    "round": int(round_num),
-                    "image_path": str(image_path),
-                    "ground_truth_label_idx": y_true_idx,
-                    "ground_truth_label": str(label_map[y_true_idx]) if 0 <= y_true_idx < len(label_map) else None,
-                    "pred_label_raw": pred_raw,
-                    "pred_label_idx": y_pred_idx,
-                    "pred_label": str(label_map[y_pred_idx]) if y_pred_idx is not None and 0 <= y_pred_idx < len(label_map) else None,
-                    "caption": "" if rationale is None else str(rationale),
-                    "is_correct": bool(y_pred_idx == y_true_idx) if y_pred_idx is not None else False,
-                })
-
-            val_payload: Dict[str, Any] = {}
-            if os.path.exists(val_predictions_path):
-                try:
-                    with open(val_predictions_path, "r", encoding="utf-8") as f:
-                        existing = json.load(f)
-                    if isinstance(existing, dict):
-                        val_payload = existing
-                except Exception:
-                    val_payload = {}
-            val_payload.setdefault("dataset", str(gen_kwargs.get("dataset", "dataset")))
-            val_payload.setdefault("fold", fold_token)
-            val_payload.setdefault("selection_method", selection_token)
-            val_payload.setdefault("split", "validation")
-            val_payload.setdefault("round_predictions", {})
-            val_payload["round_predictions"][f"round_{round_token}"] = records
-            with open(val_predictions_path, "w", encoding="utf-8") as f:
-                json.dump(val_payload, f, indent=2)
-        except Exception as e:
-            print(f"Warning: failed to write validation predictions file: {e}")
+        final_records = _build_val_records([tuple(p) for p in preds_final])
+        if not _persist_val_progress(final_records):
             val_predictions_path = ""
 
         return {
@@ -2227,18 +2488,127 @@ class APTMDL:
         if not eval_paths:
             return None
 
+        test_results_root = str(gen_kwargs.get("test_results_root", "test_results"))
+        dataset_token = _safe_path_token(gen_kwargs.get("dataset", "dataset"), default="dataset")
+        selection_token = _safe_path_token(self.selection_artifact_token, default="mdl")
+        fold_token = _safe_path_token(self.fold if self.fold is not None else gen_kwargs.get("fold"), default="na")
+        round_token = f"{int(round_num):02d}"
+        test_dir = os.path.join(test_results_root, dataset_token, f"selection_method={selection_token}")
+        os.makedirs(test_dir, exist_ok=True)
+        test_predictions_path = os.path.join(test_dir, f"fold-{fold_token}.json")
+        round_key = f"round_{round_token}"
+
+        test_payload: Dict[str, Any] = {}
+        if os.path.exists(test_predictions_path):
+            try:
+                with open(test_predictions_path, "r", encoding="utf-8") as f:
+                    existing = json.load(f)
+                if isinstance(existing, dict):
+                    test_payload = existing
+            except Exception:
+                test_payload = {}
+
+        test_payload.setdefault("dataset", str(gen_kwargs.get("dataset", "dataset")))
+        test_payload.setdefault("fold", fold_token)
+        test_payload.setdefault("selection_method", selection_token)
+        test_payload.setdefault("split", "test")
+        test_payload.setdefault("round_predictions", {})
+
+        def _build_test_records(
+            current_preds: List[Optional[Tuple[Label, Caption]]],
+        ) -> List[Dict[str, Any]]:
+            records: List[Dict[str, Any]] = []
+            for image_path, y_true, pred_pair in zip(eval_paths, eval_labels, current_preds):
+                if pred_pair is None:
+                    continue
+                pred_raw = pred_pair[0] if isinstance(pred_pair, tuple) and len(pred_pair) > 0 else None
+                rationale = pred_pair[1] if isinstance(pred_pair, tuple) and len(pred_pair) > 1 else ""
+                y_true_idx = int(y_true)
+                y_pred = self._normalize_prediction_label(pred_raw, label_map)
+                y_pred_idx = int(y_pred) if y_pred is not None else None
+                pred_label_name = (
+                    str(label_map[y_pred_idx])
+                    if y_pred_idx is not None and 0 <= y_pred_idx < len(label_map)
+                    else "invalid"
+                )
+                records.append({
+                    "round": int(round_num),
+                    "image_path": str(image_path),
+                    "ground_truth_label_idx": y_true_idx,
+                    "ground_truth_label": str(label_map[y_true_idx]) if 0 <= y_true_idx < len(label_map) else None,
+                    "pred_label_raw": pred_raw,
+                    "pred_label_idx": y_pred_idx,
+                    "pred_label": pred_label_name,
+                    "caption": "" if rationale is None else str(rationale),
+                    "is_correct": bool(y_pred_idx == y_true_idx) if y_pred_idx is not None else False,
+                })
+            return records
+
+        def _persist_test_progress(records: List[Dict[str, Any]]) -> bool:
+            try:
+                test_payload["round_predictions"][round_key] = records
+                # Keep backward compatibility with earlier readers.
+                test_payload["round"] = int(round_num)
+                test_payload["predictions"] = records
+                with open(test_predictions_path, "w", encoding="utf-8") as f:
+                    json.dump(test_payload, f, indent=2)
+                return True
+            except Exception as e:
+                print(f"Warning: failed to write test predictions file: {e}")
+                return False
+
         query_batch_size = max(1, int(gen_kwargs.get("vlm_query_batch_size", 5)))
         eval_gen_kwargs = dict(gen_kwargs)
         eval_gen_kwargs["label_map"] = list(label_map)
-        preds: List[Tuple[Label, Caption]] = []
-        num_batches = (len(eval_paths) + query_batch_size - 1) // query_batch_size
-        for i in tqdm(
-            range(0, len(eval_paths), query_batch_size),
-            total=num_batches,
+
+        preds: List[Optional[Tuple[Label, Caption]]] = [None] * len(eval_paths)
+        resume_eval = bool(gen_kwargs.get("resume", False))
+        resumed_count = 0
+        if resume_eval:
+            existing_records = test_payload.get("round_predictions", {}).get(round_key, [])
+            if not existing_records and int(test_payload.get("round", -1)) == int(round_num):
+                fallback_records = test_payload.get("predictions", [])
+                if isinstance(fallback_records, list):
+                    existing_records = fallback_records
+            records_by_path: Dict[str, Dict[str, Any]] = {}
+            if isinstance(existing_records, list):
+                for rec in existing_records:
+                    if not isinstance(rec, dict):
+                        continue
+                    rec_path = rec.get("image_path")
+                    if not rec_path:
+                        continue
+                    records_by_path[os.path.abspath(str(rec_path))] = rec
+            for idx, image_path in enumerate(eval_paths):
+                rec = records_by_path.get(os.path.abspath(str(image_path)))
+                if not rec:
+                    continue
+                pred_raw = rec.get("pred_label_raw")
+                if pred_raw is None:
+                    pred_raw = rec.get("pred_label_idx")
+                if pred_raw is None:
+                    pred_raw = rec.get("pred_label")
+                rationale = rec.get("caption", "")
+                preds[idx] = (pred_raw, "" if rationale is None else str(rationale))
+                resumed_count += 1
+            if resumed_count > 0:
+                print(
+                    f"Test r{int(round_num)}: resumed {resumed_count}/{len(eval_paths)} "
+                    f"predictions from {test_predictions_path}."
+                )
+
+        pending_indices = [idx for idx, pred in enumerate(preds) if pred is None]
+        pending_batches = (len(pending_indices) + query_batch_size - 1) // query_batch_size if pending_indices else 0
+        for start in tqdm(
+            range(0, len(pending_indices), query_batch_size),
+            total=pending_batches,
             desc=f"Test r{int(round_num)}",
             leave=False,
         ):
-            batch_paths = eval_paths[i:i + query_batch_size]
+            batch_idx = (start // query_batch_size) + 1
+            print(f"Test r{int(round_num)} pending batch {batch_idx}/{pending_batches}...")
+            batch_indices = pending_indices[start:start + query_batch_size]
+            batch_paths = [eval_paths[idx] for idx in batch_indices]
             batch_preds = vlm_query(
                 batch_paths,
                 self.S_1,
@@ -2247,19 +2617,28 @@ class APTMDL:
                 stochastic=False,
                 **eval_gen_kwargs,
             )
-            if isinstance(batch_preds, list):
-                preds.extend(batch_preds)
-            else:
-                preds.append(batch_preds)
+            if not isinstance(batch_preds, list):
+                batch_preds = [batch_preds]
+            if len(batch_preds) != len(batch_indices):
+                print(
+                    f"Test evaluation skipped: batch prediction mismatch "
+                    f"({len(batch_preds)} vs {len(batch_indices)})."
+                )
+                return None
+            for idx, pred_pair in zip(batch_indices, batch_preds):
+                preds[idx] = pred_pair
 
-        if len(preds) != len(eval_paths):
+            _persist_test_progress(_build_test_records(preds))
+
+        if any(pred is None for pred in preds):
             print(
                 f"Test evaluation skipped: prediction count mismatch "
-                f"({len(preds)} vs {len(eval_paths)})."
+                f"({sum(1 for p in preds if p is not None)} vs {len(eval_paths)})."
             )
             return None
 
-        pred_labels = [self._normalize_prediction_label(p[0], label_map) for p in preds]
+        preds_final: List[Tuple[Label, Caption]] = [pred for pred in preds if pred is not None]
+        pred_labels = [self._normalize_prediction_label(p[0], label_map) for p in preds_final]
         predicted_per_class: Dict[str, int] = {str(lbl): 0 for lbl in label_map}
         predicted_per_class["unknown"] = 0
         for y_pred in pred_labels:
@@ -2273,48 +2652,11 @@ class APTMDL:
             y_true_labels=[int(y) for y in eval_labels],
             y_pred_labels=[int(y) if y is not None else None for y in pred_labels],
             label_map=list(label_map),
+            ignore_invalid_predictions=True,
         )
 
-        test_results_root = str(gen_kwargs.get("test_results_root", "test_results"))
-        dataset_token = _safe_path_token(gen_kwargs.get("dataset", "dataset"), default="dataset")
-        selection_token = _safe_path_token(self.selection_artifact_token, default="mdl")
-        fold_token = _safe_path_token(self.fold if self.fold is not None else gen_kwargs.get("fold"), default="na")
-        round_token = f"{int(round_num):02d}"
-        test_dir = os.path.join(test_results_root, dataset_token, f"selection_method={selection_token}")
-        os.makedirs(test_dir, exist_ok=True)
-        test_predictions_path = os.path.join(test_dir, f"fold-{fold_token}.json")
-
-        try:
-            records: List[Dict[str, Any]] = []
-            for image_path, y_true, pred_pair, y_pred in zip(eval_paths, eval_labels, preds, pred_labels):
-                pred_raw = pred_pair[0] if isinstance(pred_pair, tuple) and len(pred_pair) > 0 else None
-                rationale = pred_pair[1] if isinstance(pred_pair, tuple) and len(pred_pair) > 1 else ""
-                y_true_idx = int(y_true)
-                y_pred_idx = int(y_pred) if y_pred is not None else None
-                records.append({
-                    "round": int(round_num),
-                    "image_path": str(image_path),
-                    "ground_truth_label_idx": y_true_idx,
-                    "ground_truth_label": str(label_map[y_true_idx]) if 0 <= y_true_idx < len(label_map) else None,
-                    "pred_label_raw": pred_raw,
-                    "pred_label_idx": y_pred_idx,
-                    "pred_label": str(label_map[y_pred_idx]) if y_pred_idx is not None and 0 <= y_pred_idx < len(label_map) else None,
-                    "caption": "" if rationale is None else str(rationale),
-                    "is_correct": bool(y_pred_idx == y_true_idx) if y_pred_idx is not None else False,
-                })
-
-            test_payload = {
-                "dataset": str(gen_kwargs.get("dataset", "dataset")),
-                "fold": fold_token,
-                "selection_method": selection_token,
-                "split": "test",
-                "round": int(round_num),
-                "predictions": records,
-            }
-            with open(test_predictions_path, "w", encoding="utf-8") as f:
-                json.dump(test_payload, f, indent=2)
-        except Exception as e:
-            print(f"Warning: failed to write test predictions file: {e}")
+        final_records = _build_test_records([tuple(p) for p in preds_final])
+        if not _persist_test_progress(final_records):
             test_predictions_path = ""
 
         return {
@@ -2366,6 +2708,33 @@ class APTMDL:
                     # If we finished max_rounds already
                     if start_round > self.max_rounds:
                         print(f"Checkpoint indicates {last_round} rounds completed. Max rounds is {self.max_rounds}.")
+                        # Still run/resume final test evaluation before exiting.
+                        test_eval_kwargs = dict(gen_kwargs)
+                        test_eval_kwargs.pop("label_map", None)
+                        test_metrics = self._evaluate_test_subset(
+                            test_data=test_data or [],
+                            round_num=int(last_round),
+                            label_map=gen_kwargs.get("label_map"),
+                            **test_eval_kwargs,
+                        )
+                        if test_metrics is None:
+                            print("Final test evaluation skipped.")
+                        else:
+                            print(
+                                f"Final test avg class accuracy (round {int(last_round)}): "
+                                f"{float(test_metrics['avg_class_accuracy_pct']):.1f}% | "
+                                f"classwise={test_metrics['class_accuracy_pct']} | "
+                                f"sampled_per_class={test_metrics['sampled_per_class']} | "
+                                f"predicted_per_class={test_metrics.get('predicted_per_class', {})} | "
+                                f"pred_file={test_metrics.get('test_predictions_path', '')}"
+                            )
+                            try:
+                                self._persist_final_test_results(
+                                    test_metrics=test_metrics,
+                                    **gen_kwargs,
+                                )
+                            except Exception as e:
+                                print(f"Warning: failed to persist final test metrics: {e}")
                         return self.prompt_set
                 except Exception as e:
                     print(f"Failed to resume from checkpoint: {e}. Starting from scratch.")
@@ -2384,7 +2753,7 @@ class APTMDL:
                 prompts_root=str(gen_kwargs.get("prompts_root", "prompt_sets")),
                 dataset_name=str(gen_kwargs.get("dataset", "dataset")),
                 fold=self.fold if self.fold is not None else gen_kwargs.get("fold"),
-                selection_method=self.selection_method,
+                selection_method=self.selection_artifact_token,
                 label_map=list(gen_kwargs.get("label_map") or []),
             )
             if bootstrap_global:
@@ -2595,7 +2964,7 @@ class APTMDL:
 
                 for idx, entry in enumerate(all_candidates):
                     candidate_scores.append((float(dts_scores[idx]), tuple(entry["item"])))
-            else:
+            elif self.selection_method == "mdl":
                 # Process remaining with MDL selection score
                 with tqdm(total=len(all_candidates), initial=processed_count, desc="Calculating Scores") as pbar:
                     for i, entry in enumerate(all_candidates):
@@ -2619,6 +2988,33 @@ class APTMDL:
                         candidate_scores.append((s_x, item))
 
                         # Append to log file (Efficient O(1))
+                        try:
+                            with open(intra_round_log_path, 'a', encoding='utf-8') as f:
+                                f.write(json.dumps(entry) + "\n")
+                        except Exception as e:
+                            print(f"Error writing to intra-round log: {e}")
+
+                        pbar.update(1)
+            else:
+                # Entropy-only selection score (APT-U Section 4).
+                with tqdm(total=len(all_candidates), initial=processed_count, desc="Calculating Scores") as pbar:
+                    for i, entry in enumerate(all_candidates):
+                        if entry["score"] is not None:
+                            continue
+
+                        item = tuple(entry["item"])
+                        x, _ = item
+                        s_x = entropy_uncertainty(
+                            x,
+                            self.S_1,
+                            self.S_2_template,
+                            self.prompt_set,
+                            K=self.K_uncertainty,
+                            **gen_kwargs,
+                        )
+                        entry["score"] = s_x
+                        candidate_scores.append((s_x, item))
+
                         try:
                             with open(intra_round_log_path, 'a', encoding='utf-8') as f:
                                 f.write(json.dumps(entry) + "\n")
@@ -3010,6 +3406,8 @@ class APTMDL:
                         "name": "stage1",
                         "priority": 0,
                         "order": 0,
+                        "enforce_cap": True,
+                        "cap_value": int(base_cap),
                         "pool_size": int(len(stage1_candidates)),
                         "ranked": [int(idx) for idx in stage1_ranked],
                     },
@@ -3017,6 +3415,8 @@ class APTMDL:
                         "name": "relax_cap_big",
                         "priority": 1,
                         "order": 1,
+                        "enforce_cap": True,
+                        "cap_value": int(cap_relaxed_to),
                         "pool_size": int(len(relax_pool)),
                         "ranked": [int(idx) for idx in relax_ranked],
                     },
@@ -3024,6 +3424,8 @@ class APTMDL:
                         "name": "fallback_diversity_big",
                         "priority": 2,
                         "order": 2,
+                        "enforce_cap": False,
+                        "cap_value": int(base_cap),
                         "pool_size": int(len(diversity_pool)),
                         "ranked": [int(idx) for idx in diversity_ranked],
                     },
@@ -3031,6 +3433,8 @@ class APTMDL:
                         "name": "fallback_tiny",
                         "priority": 3,
                         "order": 3,
+                        "enforce_cap": True,
+                        "cap_value": int(base_cap),
                         "pool_size": int(len(tiny_pool)),
                         "ranked": [int(idx) for idx in tiny_ranked],
                     },
@@ -3038,6 +3442,8 @@ class APTMDL:
                         "name": "last_resort_outlier",
                         "priority": 4,
                         "order": 4,
+                        "enforce_cap": False,
+                        "cap_value": int(base_cap),
                         "pool_size": int(len(outlier_big_pool) + len(outlier_tiny_pool)),
                         "ranked": [int(idx) for idx in outlier_ranked],
                     },
@@ -3070,7 +3476,9 @@ class APTMDL:
                                 ptr += 1
                                 continue
                             basin_id = int(roots_eff[idx])
-                            if int(basin_counts.get(basin_id, 0)) >= int(base_cap):
+                            stage_enforce_cap = bool(stage.get("enforce_cap", True))
+                            stage_cap_value = int(stage.get("cap_value", base_cap))
+                            if stage_enforce_cap and int(basin_counts.get(basin_id, 0)) >= int(stage_cap_value):
                                 rejection_reason_counts["per_basin_cap"] += 1
                                 per_basin_cap_rejections_by_stage[stage_name] = int(per_basin_cap_rejections_by_stage.get(stage_name, 0)) + 1
                                 if stage_name == "stage1":
@@ -3236,7 +3644,7 @@ class APTMDL:
                     f"outlier_threshold={dts_outlier_threshold:.6f}"
                 )
             else:
-                # MDL: plain top-score selection.
+                # MDL/entropy: plain top-score selection.
                 for i in range(num_to_select):
                     score, item = candidate_scores[i]
                     A_r.append(item[0])
@@ -3320,7 +3728,13 @@ class APTMDL:
                 )
                 labeled_paths_so_far = [str(x) for x, _ in self.prompt_set]
                 labeled_captions_so_far = [str(c) for _, c in self.prompt_set]
-                unlabeled_paths_after_selection = [str(item[0]) for item in unlabeled_data]
+                # Purity diagnostics should use only the current-round candidate pool after selection,
+                # not the full global unlabeled pool.
+                selected_candidate_idx_set = set(int(i) for i in dts_selected_indices)
+                candidate_paths_after_selection = [
+                    str(path) for idx, path in enumerate(candidate_paths)
+                    if int(idx) not in selected_candidate_idx_set
+                ]
 
                 # NOTE: diagnostics purity is intentionally computed after selection and oracle labels
                 # are available, and never fed back into the current round selection decisions.
@@ -3356,7 +3770,7 @@ class APTMDL:
                         label_map=gen_kwargs.get("label_map"),
                         labeled_paths_so_far=labeled_paths_so_far,
                         labeled_captions_so_far=labeled_captions_so_far,
-                        unlabeled_paths_after_selection=unlabeled_paths_after_selection,
+                        unlabeled_paths_after_selection=candidate_paths_after_selection,
                         selection_stats=dts_selection_stats,
                     )
                 except Exception as e:
@@ -3392,51 +3806,60 @@ class APTMDL:
                     print("DTS hyperparameter tuning is disabled; keeping current DTS hyperparameters unchanged.")
 
             stop_due_to_accuracy = False
-            eval_gen_kwargs = dict(gen_kwargs)
-            # Avoid duplicate keyword when forwarding kwargs.
-            eval_gen_kwargs.pop("label_map", None)
-            validation_metrics = self._evaluate_validation_subset(
-                val_data=val_data,
-                round_num=r,
-                label_map=gen_kwargs.get("label_map"),
-                **eval_gen_kwargs,
-            )
             validation_avg_acc = None
-            if validation_metrics is None:
-                print("Validation accuracy unavailable for this round; skipping accuracy-based stop check.")
-            else:
-                validation_avg_acc = float(validation_metrics["avg_class_accuracy_pct"])
-                self.last_validation_avg_class_accuracy = validation_avg_acc
-                print(
-                    f"Validation avg class accuracy (round {r}): {validation_avg_acc:.1f}% | "
-                    f"classwise={validation_metrics['class_accuracy_pct']} | "
-                    f"sampled_per_class={validation_metrics['sampled_per_class']} | "
-                    f"predicted_per_class={validation_metrics.get('predicted_per_class', {})} | "
-                    f"pred_file={validation_metrics.get('val_predictions_path', '')}"
-                )
-                eval_log = dict(validation_metrics)
-                eval_log["selection_method"] = str(self.selection_method)
-                eval_log["fold"] = self.fold
-                eval_log["stopping_threshold_pct"] = float(self.stopping_accuracy)
-                eval_log["stop_due_to_validation"] = bool(validation_avg_acc >= self.stopping_accuracy)
-                try:
-                    os.makedirs(self.logs_dir, exist_ok=True)
-                    if self.fold is not None:
-                        eval_log_name = f"validation_metrics_fold={self.fold}_selection={self.selection_artifact_token}.jsonl"
-                    else:
-                        eval_log_name = f"validation_metrics_selection={self.selection_artifact_token}.jsonl"
-                    eval_log_path = os.path.join(self.logs_dir, eval_log_name)
-                    with open(eval_log_path, "a", encoding="utf-8") as f:
-                        f.write(json.dumps(eval_log) + "\n")
-                except Exception as e:
-                    print(f"Warning: failed to append validation metrics log: {e}")
+            is_final_round = int(r) >= int(self.max_rounds)
+            validation_metrics = None
 
-                if validation_avg_acc >= self.stopping_accuracy:
+            if is_final_round:
+                print(
+                    f"Skipping validation evaluation at final round {r} "
+                    f"(max_rounds={self.max_rounds}); proceeding to final test after round completion."
+                )
+            else:
+                eval_gen_kwargs = dict(gen_kwargs)
+                # Avoid duplicate keyword when forwarding kwargs.
+                eval_gen_kwargs.pop("label_map", None)
+                validation_metrics = self._evaluate_validation_subset(
+                    val_data=val_data,
+                    round_num=r,
+                    label_map=gen_kwargs.get("label_map"),
+                    **eval_gen_kwargs,
+                )
+                if validation_metrics is None:
+                    print("Validation accuracy unavailable for this round; skipping accuracy-based stop check.")
+                else:
+                    validation_avg_acc = float(validation_metrics["avg_class_accuracy_pct"])
+                    self.last_validation_avg_class_accuracy = validation_avg_acc
                     print(
-                        f"Stopping: validation avg class accuracy {validation_avg_acc:.1f}% "
-                        f"reached threshold {self.stopping_accuracy:.1f}%."
+                        f"Validation avg class accuracy (round {r}): {validation_avg_acc:.1f}% | "
+                        f"classwise={validation_metrics['class_accuracy_pct']} | "
+                        f"sampled_per_class={validation_metrics['sampled_per_class']} | "
+                        f"predicted_per_class={validation_metrics.get('predicted_per_class', {})} | "
+                        f"pred_file={validation_metrics.get('val_predictions_path', '')}"
                     )
-                    stop_due_to_accuracy = True
+                    eval_log = dict(validation_metrics)
+                    eval_log["selection_method"] = str(self.selection_method)
+                    eval_log["fold"] = self.fold
+                    eval_log["stopping_threshold_pct"] = float(self.stopping_accuracy)
+                    eval_log["stop_due_to_validation"] = bool(validation_avg_acc >= self.stopping_accuracy)
+                    try:
+                        os.makedirs(self.logs_dir, exist_ok=True)
+                        if self.fold is not None:
+                            eval_log_name = f"validation_metrics_fold={self.fold}_selection={self.selection_artifact_token}.jsonl"
+                        else:
+                            eval_log_name = f"validation_metrics_selection={self.selection_artifact_token}.jsonl"
+                        eval_log_path = os.path.join(self.logs_dir, eval_log_name)
+                        with open(eval_log_path, "a", encoding="utf-8") as f:
+                            f.write(json.dumps(eval_log) + "\n")
+                    except Exception as e:
+                        print(f"Warning: failed to append validation metrics log: {e}")
+
+                    if validation_avg_acc >= self.stopping_accuracy:
+                        print(
+                            f"Stopping: validation avg class accuracy {validation_avg_acc:.1f}% "
+                            f"reached threshold {self.stopping_accuracy:.1f}%."
+                        )
+                        stop_due_to_accuracy = True
 
             try:
                 self._persist_fold_results(
@@ -3450,7 +3873,12 @@ class APTMDL:
 
             # Save checkpoint
             self.unlabeled_data = unlabeled_data
-            self.save_checkpoint(r, validation_avg_acc, checkpoint_path)
+            checkpoint_accuracy = (
+                validation_avg_acc
+                if validation_avg_acc is not None
+                else self.last_validation_avg_class_accuracy
+            )
+            self.save_checkpoint(r, checkpoint_accuracy, checkpoint_path)
             
             # Delete intra-round log after successful completion of the round
             if os.path.exists(intra_round_log_path):
@@ -3574,8 +4002,8 @@ def parse_arguments():
                         help="Directory root for consolidated per-fold JSON summaries.")
 
     # Selection method and DTS parameters
-    parser.add_argument("--selection_method", type=str, required=True, choices=["mdl", "dts"],
-                        help="Active-set scoring method: 'mdl' (existing) or 'dts' (embedding density-tree).")
+    parser.add_argument("--selection_method", type=str, required=True, choices=["mdl", "entropy", "dts"],
+                        help="Active-set scoring method: 'mdl', 'entropy' (Shannon entropy), or 'dts' (embedding density-tree).")
     parser.add_argument("--dts_k", type=int, default=60,
                         help="k for DTS neighborhood graph construction.")
     parser.add_argument("--dts_k_rho", type=int, default=30,
@@ -3601,9 +4029,9 @@ def parse_arguments():
     parser.add_argument("--no_dts_tune_hparams", dest="dts_tune_hparams", action="store_false",
                         help="Disable DTS hyperparameter mutation; diagnostics/tuner decisions are still logged.")
     parser.set_defaults(dts_tune_hparams=True)
-    parser.add_argument("--dts_clip_model_alias", type=str, default=DEFAULT_DTS_CLIP_MODEL_ALIAS,
+    parser.add_argument("--dts_clip_model_alias", type=str, default=None,
                         choices=sorted(DTS_CLIP_MODEL_ALIASES.keys()),
-                        help="DTS embedding model alias key.")
+                        help="DTS embedding model alias key (optional; if omitted, dts_clip_model_name is used, then default is biomedclip).")
     parser.add_argument("--dts_clip_model_name", type=str, default=None,
                         help="(Legacy fallback) DTS embedding model id or alias; ignored if dts_clip_model_alias is set.")
     parser.add_argument("--clip_batch_size", type=int, default=32,
@@ -3649,6 +4077,8 @@ def parse_arguments():
                         help="Batch size for VLM queries during sample selection.")
     parser.add_argument("--vlm_query_batch_size", type=int, default=5,
                         help="Batch size for VLM calls inside oracle_label_and_edit.")
+    parser.add_argument("--vlm_timeout_s", type=float, default=120.0,
+                        help="Per-request timeout (seconds) for VLM API calls.")
 
     # VLM generation parameters (passed as gen_kwargs)
     parser.add_argument("--model", type=str, default="gpt-4o",
@@ -3776,6 +4206,8 @@ if __name__ == "__main__":
         selection_artifact_token = _selection_artifact_token(
             selection_method=args.selection_method,
             dts_clip_model_name=resolved_dts_clip_model_name,
+            active_set_batch_size=args.initial_batch_size,
+            candidate_pool_size=args.candidate_pool_size,
         )
 
         checkpoint_path = with_selection_suffix(checkpoint_path, selection_artifact_token)
@@ -3820,7 +4252,8 @@ if __name__ == "__main__":
             prompt_set_path=prompt_set_path,
             logs_dir=args.logs_dir,
             fold=fold_num,
-            stopping_accuracy=args.stopping_accuracy
+            stopping_accuracy=args.stopping_accuracy,
+            active_set_batch_size=args.initial_batch_size,
         )
         aptmdl.initialize_seed(args.init_prompts_path, args.dataset, fold=fold_num)
         aptmdl.unlabeled_data = load_data(unlabeled_data_json_path, args.label_map)
@@ -3845,6 +4278,7 @@ if __name__ == "__main__":
             initial_batch_size=args.initial_batch_size,
             selection_batch_size=args.selection_batch_size,
             vlm_query_batch_size=args.vlm_query_batch_size,
+            vlm_timeout_s=args.vlm_timeout_s,
             model=args.model,
             temperature=args.temperature,
             max_tokens=args.max_tokens,

@@ -3,7 +3,7 @@
   "fold": 5,
   "selection_method": "dts",
   "created_at": "2026-02-15 21:25:05",
-  "updated_at": "2026-02-15 21:40:22",
+  "updated_at": "2026-02-15 22:16:24",
   "rounds": {
     "1": {
       "validation": {
@@ -173,6 +173,129 @@
         "prompts_out_path": "prompt_sets/microscopy_lurcher/fold-5/fold5_round2_prompts_dts_corrected.json",
         "global_prompts_path": "prompt_sets/microscopy_lurcher/fold-5/global_prompts_dts_corrected.json"
       }
+    },
+    "3": {
+      "validation": {
+        "round": 3,
+        "validation_subset_size": 100,
+        "sampled_per_class": {
+          "wild": 50,
+          "lurcher": 50
+        },
+        "predicted_per_class": {
+          "wild": 58,
+          "lurcher": 42,
+          "unknown": 0
+        },
+        "class_totals": {
+          "wild": 50,
+          "lurcher": 50
+        },
+        "class_correct": {
+          "wild": 45,
+          "lurcher": 37
+        },
+        "case_ids_by_class": {
+          "wild": [
+            "6134"
+          ],
+          "lurcher": [
+            "6350"
+          ]
+        },
+        "case_ids_correct_by_class": {
+          "wild": [
+            "6134"
+          ],
+          "lurcher": [
+            "6350"
+          ]
+        },
+        "class_accuracy_pct": {
+          "wild": 90.0,
+          "lurcher": 74.0
+        },
+        "avg_class_accuracy_pct": 82.0,
+        "val_predictions_path": "val_results/microscopy_lurcher/selection_method=dts_biomedclip/fold-5.json"
+      },
+      "active_set": {
+        "round": 3,
+        "active_set_size": 4,
+        "class_totals": {
+          "wild": 4,
+          "lurcher": 0
+        },
+        "class_correct": {
+          "wild": 2,
+          "lurcher": 0
+        },
+        "case_ids_by_class": {
+          "wild": [
+            "6130",
+            "6483",
+            "6133"
+          ],
+          "lurcher": []
+        },
+        "case_ids_correct_by_class": {
+          "wild": [
+            "6130"
+          ],
+          "lurcher": []
+        },
+        "class_accuracy_pct": {
+          "wild": 50.0,
+          "lurcher": 0.0
+        },
+        "avg_class_accuracy_pct": 25.0,
+        "oracle_accuracy_pct": 50.0,
+        "prompts_in_path": "prompt_sets/microscopy_lurcher/fold-5/fold5_round3_prompts_dts.json",
+        "prompts_out_path": "prompt_sets/microscopy_lurcher/fold-5/fold5_round3_prompts_dts_corrected.json",
+        "global_prompts_path": "prompt_sets/microscopy_lurcher/fold-5/global_prompts_dts_corrected.json"
+      }
     }
+  },
+  "test": {
+    "round": 3,
+    "test_subset_size": 146,
+    "sampled_per_class": {
+      "wild": 96,
+      "lurcher": 50
+    },
+    "predicted_per_class": {
+      "wild": 76,
+      "lurcher": 70,
+      "unknown": 0
+    },
+    "class_totals": {
+      "wild": 96,
+      "lurcher": 50
+    },
+    "class_correct": {
+      "wild": 76,
+      "lurcher": 50
+    },
+    "case_ids_by_class": {
+      "wild": [
+        "6324"
+      ],
+      "lurcher": [
+        "6480"
+      ]
+    },
+    "case_ids_correct_by_class": {
+      "wild": [
+        "6324"
+      ],
+      "lurcher": [
+        "6480"
+      ]
+    },
+    "class_accuracy_pct": {
+      "wild": 79.16666666666667,
+      "lurcher": 100.0
+    },
+    "avg_class_accuracy_pct": 89.58333333333334,
+    "test_predictions_path": "test_results/microscopy_lurcher/selection_method=dts_biomedclip/fold-5.json"
   }
 }

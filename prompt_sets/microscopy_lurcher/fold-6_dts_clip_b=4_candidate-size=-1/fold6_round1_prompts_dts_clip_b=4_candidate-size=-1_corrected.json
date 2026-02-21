@@ -1,0 +1,35 @@
+{
+    "prompts": [
+        {
+            "explanation": "Cellular organization is less dense with irregular distribution. The layering pattern is distinct but abnormal. There is a near-absence of the Purkinje cell layer. The granule cell layer appears thinner with lower cell density. Overall structure shows gaps and disruptions in tissue architecture with non-uniform staining.",
+            "rationale": "Cellular organization is less dense with irregular distribution. The layering pattern is distinct but abnormal. There is a near-absence of the Purkinje cell layer. The granule cell layer appears thinner with lower cell density. Overall structure shows gaps and disruptions in tissue architecture with non-uniform staining.",
+            "class": "lurcher",
+            "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6926/6926_lurcher_10x_lurcher_3_1_Image_03.jpg",
+            "manual_corrected": false
+        },
+        {
+            "explanation": "Image 1 displays dense cellular organization and well-defined layering, indicative of a typical wild-type cerebellum. The Purkinje cell layer appears intact between the molecular and granular layers, with high granule cell density and consistent layer thickness. The overall structure is compact with minimal gaps, and the staining is homogeneous without stark variations.",
+            "rationale": "Image 1 displays dense cellular organization and well-defined layering, indicative of a typical wild-type cerebellum. The Purkinje cell layer appears intact between the molecular and granular layers, with high granule cell density and consistent layer thickness. The overall structure is compact with minimal gaps, and the staining is homogeneous without stark variations.",
+            "class": "wild",
+            "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6353/6353_wild_10x_wild_1_2_Image_04.jpg",
+            "manual_corrected": false
+        },
+        {
+            "explanation": "Cellular organization is dense and regular, with compact arrangement and consistent granule cell density. The layering pattern is continuous and well-defined, characteristic of normal structure. Purkinje cell layer is present as a distinct monolayer. The granule cell layer is thick and densely packed. Overall structure is coherent, with minimal spaces. Staining pattern is homogeneous, indicating healthy tissues.",
+            "rationale": "Cellular organization is dense and regular, with compact arrangement and consistent granule cell density. The layering pattern is continuous and well-defined, characteristic of normal structure. Purkinje cell layer is present as a distinct monolayer. The granule cell layer is thick and densely packed. Overall structure is coherent, with minimal spaces. Staining pattern is homogeneous, indicating healthy tissues.",
+            "class": "wild",
+            "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/5973/5973_wild_10x_wild_2_1_Image_05.jpg",
+            "manual_corrected": false
+        },
+        {
+            "explanation": "The image shows a compact cellular organization with dense cells and uniform distribution. The layering pattern is continuous and well-defined, with consistent thickness. The Purkinje cell layer is present and distinct. The granule cell layer is thick and densely packed with high cell density. The overall structure is continuous with no visible gaps. The staining pattern is homogeneous across the cerebellar cortex.",
+            "rationale": "The image shows a compact cellular organization with dense cells and uniform distribution. The layering pattern is continuous and well-defined, with consistent thickness. The Purkinje cell layer is present and distinct. The granule cell layer is thick and densely packed with high cell density. The overall structure is continuous with no visible gaps. The staining pattern is homogeneous across the cerebellar cortex.",
+            "class": "wild",
+            "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6130/6130_wild_3_1_Image_05.jpg",
+            "manual_corrected": false
+        }
+    ],
+    "caption correction count": 2,
+    "Duration in minutes": 2.626,
+    "accuracy": 50.0
+}

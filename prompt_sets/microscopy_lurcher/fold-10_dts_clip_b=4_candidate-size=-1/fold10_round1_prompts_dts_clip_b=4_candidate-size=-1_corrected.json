@@ -1,0 +1,35 @@
+{
+    "prompts": [
+        {
+            "explanation": "The image shows a disrupted cellular organization with an irregular cell distribution. The layering pattern is abnormal with unclear boundaries and reduced thickness. The Purkinje cell layer is nearly absent, indicating severe depletion. The internal granular layer is thin with diminished cell density. Overall, there are visible gaps and discontinuities in the tissue architecture. The staining pattern is uneven with distinct boundary variations between layers.",
+            "rationale": "The image shows a disrupted cellular organization with an irregular cell distribution. The layering pattern is abnormal with unclear boundaries and reduced thickness. The Purkinje cell layer is nearly absent, indicating severe depletion. The internal granular layer is thin with diminished cell density. Overall, there are visible gaps and discontinuities in the tissue architecture. The staining pattern is uneven with distinct boundary variations between layers.",
+            "class": "lurcher",
+            "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6509/6509_lurcher_10x_lurcher_1_2_Image_02.jpg",
+            "manual_corrected": false
+        },
+        {
+            "explanation": "The image displays dense and compact cellular organization with a uniform distribution. The layering pattern is regular, with consistent thickness. The Purkinje cell layer is visible and intact. The granule cell layer is thick and densely packed. The overall structure is continuous without gaps. Staining is homogeneous across the cerebellar cortex.",
+            "rationale": "The image displays dense and compact cellular organization with a uniform distribution. The layering pattern is regular, with consistent thickness. The Purkinje cell layer is visible and intact. The granule cell layer is thick and densely packed. The overall structure is continuous without gaps. Staining is homogeneous across the cerebellar cortex.",
+            "class": "wild",
+            "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6324/6324_wild_4_1_Image_10.jpg",
+            "manual_corrected": false
+        },
+        {
+            "explanation": "The cellular organization appears dense and regular. The layering pattern is well-defined with clear boundaries. The Purkinje cell layer is distinct as a monolayer. The granule cell layer is thick and densely populated. The overall structure is continuous with minimal spaces, and the staining pattern is homogeneous.",
+            "rationale": "The cellular organization appears dense and regular. The layering pattern is well-defined with clear boundaries. The Purkinje cell layer is distinct as a monolayer. The granule cell layer is thick and densely populated. The overall structure is continuous with minimal spaces, and the staining pattern is homogeneous.",
+            "class": "wild",
+            "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6349/6349_wild_10x_wild_1_3_Image_04.jpg",
+            "manual_corrected": false
+        },
+        {
+            "explanation": "Cellular organization is diffused with irregular distribution. The layering pattern is disrupted. Purkinje cell layer is completely absent. Granule cell layer appears thick but has significant reduction in density and has gaps throughout the layer. Overall structure is disrupted with visible gaps. Staining pattern is varied across the cerebellar cortex. These features are typical of a Lurcher cerebellum.",
+            "rationale": "Cellular organization is diffused with irregular distribution. The layering pattern is disrupted. Purkinje cell layer is completely absent. Granule cell layer appears thick but has significant reduction in density and has gaps throughout the layer. Overall structure is disrupted with visible gaps. Staining pattern is varied across the cerebellar cortex. These features are typical of a Lurcher cerebellum.",
+            "class": "lurcher",
+            "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6350/6350_lurcher_10x_lurcher_1_3_Image_03.jpg",
+            "manual_corrected": false
+        }
+    ],
+    "caption correction count": 1,
+    "Duration in minutes": 2.259,
+    "accuracy": 75.0
+}
