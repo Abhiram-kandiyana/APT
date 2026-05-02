@@ -83,31 +83,83 @@ class TestBatchProcessing(unittest.TestCase):
                 break
         self.assertTrue(sp2_found)
 
-    def test_vlm_query_retry_logic(self):
-        # First call returns 1 result (mismatch), second call returns 2 (success)
+    def test_vlm_query_mismatch_retries_then_counts_invalid(self):
         self.mock_message.content = "R: R1 C: wild"
-        
-        # Side effect to change return value
-        def side_effect(*args, **kwargs):
-            if self.mock_client.chat.completions.create.call_count == 1:
-                self.mock_message.content = "R: R1 C: wild"
-            else:
-                self.mock_message.content = "R: R1 C: wild R: R2 C: lurcher"
-            return self.mock_response
-            
-        self.mock_client.chat.completions.create.side_effect = side_effect
         
         images = ["img1.jpg", "img2.jpg"]
         sp1 = "System Prompt 1"
         sp2_template = "Classify {N} images"
         prompt_set = []
+        invalid_output_stats = {}
         
         results = vlm_query(
             images, sp1, sp2_template, prompt_set,
-            label_map=["wild", "lurcher"]
+            label_map=["wild", "lurcher"],
+            invalid_output_stats=invalid_output_stats,
         )
         
         self.assertEqual(len(results), 2)
+        self.assertEqual(results[0][0], -1)
+        self.assertEqual(results[1][0], -1)
+        self.assertEqual(self.mock_client.chat.completions.create.call_count, 3)
+        self.assertEqual(invalid_output_stats["prediction_count_mismatch"], 3)
+        self.assertEqual(invalid_output_stats["exhausted_invalid_output_retries"], 2)
+
+    def test_vlm_query_invalid_label_retries_then_counts_invalid(self):
+        self.mock_message.content = "R: R1 C: garbage"
+        invalid_output_stats = {}
+
+        results = vlm_query(
+            ["img1.jpg"],
+            "System Prompt 1",
+            "Classify {N} images",
+            [],
+            label_map=["wild", "lurcher"],
+            invalid_output_stats=invalid_output_stats,
+        )
+
+        self.assertEqual(results[0][0], -1)
+        self.assertEqual(self.mock_client.chat.completions.create.call_count, 3)
+        self.assertEqual(invalid_output_stats["invalid_label"], 3)
+        self.assertEqual(invalid_output_stats["exhausted_invalid_output_retries"], 1)
+
+    def test_vlm_query_invalid_label_respects_single_attempt_setting(self):
+        self.mock_message.content = "R: R1 C: garbage"
+        invalid_output_stats = {}
+
+        results = vlm_query(
+            ["img1.jpg"],
+            "System Prompt 1",
+            "Classify {N} images",
+            [],
+            label_map=["wild", "lurcher"],
+            invalid_output_stats=invalid_output_stats,
+            invalid_output_max_retries=1,
+        )
+
+        self.assertEqual(results[0][0], -1)
+        self.assertEqual(self.mock_client.chat.completions.create.call_count, 1)
+        self.assertEqual(invalid_output_stats["invalid_label"], 1)
+        self.assertEqual(invalid_output_stats["exhausted_invalid_output_retries"], 1)
+
+    def test_vlm_query_invalid_label_can_recover_on_retry(self):
+        responses = ["R: R1 C: garbage", "R: R1 C: wild"]
+
+        def side_effect(*args, **kwargs):
+            self.mock_message.content = responses[self.mock_client.chat.completions.create.call_count - 1]
+            return self.mock_response
+
+        self.mock_client.chat.completions.create.side_effect = side_effect
+
+        results = vlm_query(
+            ["img1.jpg"],
+            "System Prompt 1",
+            "Classify {N} images",
+            [],
+            label_map=["wild", "lurcher"]
+        )
+
+        self.assertEqual(results[0][0], 0)
         self.assertEqual(self.mock_client.chat.completions.create.call_count, 2)
 
     def test_mdl_loss_batching(self):

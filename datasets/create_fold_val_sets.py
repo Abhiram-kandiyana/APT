@@ -383,7 +383,7 @@ if __name__ == "__main__":
     # Example:
     # python /Users/abhiramkandiyana/Microscopy/Microscopy/APT-MDL/datasets/create_fold_val_sets.py \
     #   --dataset-dir /Users/abhiramkandiyana/Microscopy/Microscopy/APT-MDL/datasets/microscopy_lurcher \
-    #   --folds 5 6 10 \
+    #   --folds 5\
     #   --validation-round-key round-1 \
-    #   --val-percent-samples-per-case 25
+    #   --val-percent-samples-per-case 50
     main()

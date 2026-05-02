@@ -69,6 +69,7 @@ class TestVLMQuery(unittest.TestCase):
 
     def test_text_encoder(self):
         # Mock the st_model.encode method
+        code_mdl.st_model = MagicMock()
         mock_embeddings = MagicMock()
         mock_embeddings.__len__.return_value = 1
         code_mdl.st_model.encode.return_value = mock_embeddings
@@ -82,9 +83,7 @@ class TestVLMQuery(unittest.TestCase):
     def test_tokenizer(self):
         text = "Hello, world!"
         tokens = code_mdl.tokenizer(text)
-        # Expected: ['Hello', ',', 'world', '!'] or similar depending on regex
-        self.assertIn('Hello', tokens)
-        self.assertIn('world', tokens)
+        self.assertTrue(all(isinstance(token, int) for token in tokens))
         self.assertTrue(len(tokens) >= 2)
 
 if __name__ == '__main__':

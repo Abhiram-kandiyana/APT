@@ -1,0 +1,64 @@
+{
+    "prompts": [
+        {
+            "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6353/6353_wild_10x_wild_2_3_Image_06.jpg",
+            "class": "wild",
+            "rationale": "The cellular organization is dense and compact. The layering pattern is continuous and well-defined. The Purkinje cell layer is present as a clear monolayer. The granule cell layer is densely packed with high cell density. The overall structure is compact with no visible gaps. Staining pattern is homogeneous across the tissue.",
+            "explanation": "The cellular organization is dense and compact. The layering pattern is continuous and well-defined. The Purkinje cell layer is present as a clear monolayer. The granule cell layer is densely packed with high cell density. The overall structure is compact with no visible gaps. Staining pattern is homogeneous across the tissue."
+        },
+        {
+            "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/5955/5955_lurcher_3_2_Image_06.jpg",
+            "class": "lurcher",
+            "rationale": "There is disrupted cellular organization with irregular distribution. The layering pattern is abnormal with clear separations and reduced thickness. The Purkinje cell layer is absent. The granule cell layer is thinned with reduced density. Overall structure demonstrates visible gaps and discontinuities. Staining intensity is variable, with more distinct boundaries between layers.",
+            "explanation": "There is disrupted cellular organization with irregular distribution. The layering pattern is abnormal with clear separations and reduced thickness. The Purkinje cell layer is absent. The granule cell layer is thinned with reduced density. Overall structure demonstrates visible gaps and discontinuities. Staining intensity is variable, with more distinct boundaries between layers."
+        },
+        {
+            "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6926/6926_lurcher_10x_lurcher_6_4_Image_01.jpg",
+            "class": "lurcher",
+            "rationale": "The cellular organization is disrupted with non-uniform distribution. Layering shows irregular thickness and is not continuous. The Purkinje cell layer is absent. The granule cell layer is visibly thinned and less dense. The structure exhibits discontinuities and variable staining intensity.",
+            "explanation": "The cellular organization is disrupted with non-uniform distribution. Layering shows irregular thickness and is not continuous. The Purkinje cell layer is absent. The granule cell layer is visibly thinned and less dense. The structure exhibits discontinuities and variable staining intensity."
+        },
+        {
+            "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/5973/5973_wild_10x_wild_3_3_Image_02.jpg",
+            "class": "wild",
+            "rationale": "The cellular organization is dense and compact with uniform distribution. Layering pattern is well-defined and continuous. The Purkinje cell layer appears intact and clearly situated. The granule cell layer is thick and densely packed. The overall structure is compact with minimal spaces between cells. Staining is homogeneous across the cerebellar cortex.",
+            "explanation": "The cellular organization is dense and compact with uniform distribution. Layering pattern is well-defined and continuous. The Purkinje cell layer appears intact and clearly situated. The granule cell layer is thick and densely packed. The overall structure is compact with minimal spaces between cells. Staining is homogeneous across the cerebellar cortex."
+        },
+        {
+            "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6323/6323_lurcher_10x_lurcher_1_4_Image_01.jpg",
+            "class": "lurcher",
+            "rationale": "The organizational pattern is irregular with disrupted layering. The Purkinje cell layer is depleted or absent. The granule cell layer is thinned. The overall structure is discontinuous with numerous spaces and variable staining.",
+            "explanation": "The organizational pattern is irregular with disrupted layering. The Purkinje cell layer is depleted or absent. The granule cell layer is thinned. The overall structure is discontinuous with numerous spaces and variable staining."
+        },
+        {
+            "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6927/6927_lurcher_10x_lurcher_3_1_Image_04.jpg",
+            "class": "lurcher",
+            "rationale": "Cellular organization is disrupted with irregular distribution of cells. The layering pattern is abnormal with separations and reduced thickness. The Purkinje cell layer is absent. The granule cell layer appears thinned with reduced cell density. Overall structure shows gaps and discontinuities. Staining pattern is variable.",
+            "explanation": "Cellular organization is disrupted with irregular distribution of cells. The layering pattern is abnormal with separations and reduced thickness. The Purkinje cell layer is absent. The granule cell layer appears thinned with reduced cell density. Overall structure shows gaps and discontinuities. Staining pattern is variable."
+        },
+        {
+            "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6349/6349_wild_10x_wild_5_1_Image_05.jpg",
+            "class": "wild",
+            "rationale": "Cellular organization is dense and compact with uniform distribution. Layering is well-defined and continuous. The Purkinje cell layer is intact. The granule cell layer is thick and densely packed. Overall structure is compact with minimal gaps. Staining intensity is homogeneous.",
+            "explanation": "Cellular organization is dense and compact with uniform distribution. Layering is well-defined and continuous. The Purkinje cell layer is intact. The granule cell layer is thick and densely packed. Overall structure is compact with minimal gaps. Staining intensity is homogeneous."
+        },
+        {
+            "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6349/6349_wild_10x_wild_2_3_Image_25.jpg",
+            "class": "wild",
+            "rationale": "Cellular organization is dense and compact with regular distribution. Layering pattern is well-defined and continuous. The Purkinje cell layer is intact. The granule cell layer is thick and densely packed. Overall structure is continuous with no gaps. Staining is homogeneous.",
+            "explanation": "Cellular organization is dense and compact with regular distribution. Layering pattern is well-defined and continuous. The Purkinje cell layer is intact. The granule cell layer is thick and densely packed. Overall structure is continuous with no gaps. Staining is homogeneous."
+        },
+        {
+            "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/5954/5954_lurcher_2_2_Image_01.jpg",
+            "class": "lurcher",
+            "rationale": "Disrupted cellular organization with irregular distribution. Layering pattern is abnormal with unclear boundaries and reduced thickness. The Purkinje cell layer is absent. Granule cell layer is thin with diminished cell density. Overall structure shows gaps and variable staining.",
+            "explanation": "Disrupted cellular organization with irregular distribution. Layering pattern is abnormal with unclear boundaries and reduced thickness. The Purkinje cell layer is absent. Granule cell layer is thin with diminished cell density. Overall structure shows gaps and variable staining."
+        },
+        {
+            "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6926/6926_lurcher_10x_lurcher_1_2_Image_01.jpg",
+            "class": "lurcher",
+            "rationale": "Cellular organization is disrupted with non-uniform distribution. Layering shows irregular thickness with separations. The Purkinje cell layer is absent. The granule cell layer is thinned with reduced density. Structure shows discontinuities and variable staining intensity.",
+            "explanation": "Cellular organization is disrupted with non-uniform distribution. Layering shows irregular thickness with separations. The Purkinje cell layer is absent. The granule cell layer is thinned with reduced density. Structure shows discontinuities and variable staining intensity."
+        }
+    ]
+}

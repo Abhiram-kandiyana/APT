@@ -211,8 +211,8 @@ def _selection_artifact_token(
     candidate_pool_size: Optional[int] = None,
 ) -> str:
     selection = str(selection_method or "mdl").lower().strip()
-    if selection != "dts":
-        return _safe_path_token(selection, default="mdl")
+    if selection == "zero_shot":
+        return "zero_shot"
 
     batch_token = ""
     try:
@@ -227,6 +227,10 @@ def _selection_artifact_token(
         cand_token = f"_candidate-size={c}"
     except (TypeError, ValueError):
         cand_token = ""
+
+    if selection != "dts":
+        base = _safe_path_token(selection, default="mdl")
+        return f"{base}{batch_token}{cand_token}"
 
     model_alias = _dts_clip_model_alias(dts_clip_model_name)
     if model_alias == "biomedclip":
@@ -518,6 +522,15 @@ def log_vlm_response(log_path: str, image_path: Union[str, List[str]], label: Un
         json.dump(data, f, indent=4)
 
 
+def _increment_invalid_output_stat(gen_kwargs: Dict[str, Any], event_name: str, count: int = 1) -> None:
+    stats = gen_kwargs.get("invalid_output_stats")
+    if not isinstance(stats, dict):
+        return
+    key = str(event_name)
+    stats[key] = int(stats.get(key, 0) or 0) + int(count)
+    stats["total_invalid_output_events"] = int(stats.get("total_invalid_output_events", 0) or 0) + int(count)
+
+
 def vlm_query(
     x: Union[Image, List[Image]],
     system_prompt_1: str,
@@ -543,6 +556,8 @@ def vlm_query(
     # Determine if input is a batch
     is_batch = isinstance(x, list)
     images = x if is_batch else [x]
+    parse_kwargs = dict(gen_kwargs)
+    parse_kwargs["expected_num_predictions"] = len(images)
     
     # 1. Construct the message content
     content = []
@@ -591,7 +606,9 @@ def vlm_query(
     top_p = gen_kwargs.get("top_p", 1.0)
     request_timeout_s = float(gen_kwargs.get("vlm_timeout_s", 120))
 
-    max_retries = 5
+    max_retries = int(gen_kwargs.get("invalid_output_max_retries", 3) or 3)
+    if max_retries <= 0:
+        max_retries = 1
     retry_count = 0
     
     while retry_count < max_retries:
@@ -607,16 +624,31 @@ def vlm_query(
             lower_stripped = output_text.lower().strip()
             if lower_stripped == "" or ("i'm" in lower_stripped and ("can't" in lower_stripped or "can’t" in lower_stripped or "cannot" in lower_stripped or "unable" in lower_stripped)) or ("I'm unable" in lower_stripped):
                 print("Model returned an invalid/refusal response; retrying after delay.")
+                _increment_invalid_output_stat(gen_kwargs, "invalid_refusal_or_empty")
                 retry_count += 1
-                time.sleep(2)
+                time.sleep(1)
                 continue
             
             # 3. Parse output
-            parsed_results = parse_vlm_response(output_text, gen_kwargs)
+            parsed_results = parse_vlm_response(output_text, parse_kwargs)
             
             # Validation for batch processing
             if len(parsed_results) != len(images):
-                print(f"Warning: Mismatch in number of predictions ({len(parsed_results)}) vs images ({len(images)}). Retrying...")
+                print(
+                    f"Warning: Mismatch in number of predictions ({len(parsed_results)}) "
+                    f"vs images ({len(images)}). Retrying..."
+                )
+                _increment_invalid_output_stat(gen_kwargs, "prediction_count_mismatch")
+                retry_count += 1
+                time.sleep(1)
+                continue
+            label_map = gen_kwargs.get("label_map")
+            if label_map and any(
+                int(pred_label) < 0 or int(pred_label) >= len(label_map)
+                for pred_label, _ in parsed_results
+            ):
+                print("Warning: VLM returned invalid labels. Retrying...")
+                _increment_invalid_output_stat(gen_kwargs, "invalid_label")
                 retry_count += 1
                 time.sleep(1)
                 continue
@@ -639,12 +671,13 @@ def vlm_query(
             retry_count += 1
             time.sleep(2)
             
-    # If retries exhausted, return invalid prediction so metrics can ignore it.
+    # If retries are exhausted, return invalid predictions; evaluation counts them as wrong.
     print(f"Max retries ({max_retries}) exhausted. Returning invalid label -1.")
+    _increment_invalid_output_stat(gen_kwargs, "exhausted_invalid_output_retries", count=len(images))
     default_label = -1
     default_rationale = (
         "Unable to get a classification from the model even after multiple retries. "
-        "This prediction is marked invalid and should be excluded from accuracy metrics."
+        "This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
     )
     default_results = [(default_label, default_rationale) for _ in images]
     
@@ -669,22 +702,41 @@ def parse_vlm_response(output_text: str, gen_kwargs: Dict[str, Any]) -> List[Tup
     """
     results = []
     
-    # Split by "R:" to handle multiple outputs
+    # Split by "R:"/"E:" to handle multiple outputs
     # The format is expected to be R: ... C: ... repeated
     # We can use regex to find all occurrences
     
-    # Pattern to match R: ... C: ... blocks
+    # Pattern to match R/E: ... C: ... blocks
     # Using non-greedy match for rationale
-    pattern = r"['\"]?R['\"]?:\s*(.*?)\s*['\"]?C['\"]?:\s*['\"]?(\w+)['\"]?"
+    pattern = r"['\"]?[RE]['\"]?:\s*(.*?)\s*['\"]?C['\"]?:\s*['\"]?(\w+)['\"]?"
     matches = re.findall(pattern, output_text, re.DOTALL | re.IGNORECASE)
     
     if not matches:
+        label_map = gen_kwargs.get("label_map", None)
+        expected_num_predictions = int(gen_kwargs.get("expected_num_predictions", 0) or 0)
+        if label_map and expected_num_predictions > 1:
+            line_results: List[Tuple[Label, Caption]] = []
+            for line in str(output_text).splitlines():
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                inferred = infer_label_from_text(stripped, label_map)
+                if inferred is None:
+                    continue
+                line_results.append((int(inferred), stripped))
+            if len(line_results) == expected_num_predictions:
+                return line_results
+
+        inferred = infer_label_from_text(output_text, label_map) if label_map else None
+        if inferred is not None:
+            return [(int(inferred), output_text.strip())]
+
         # Fallback for single output or malformed output
         # Try previous logic for single item
         rationale = "" 
-        label = 0
+        label = -1
         
-        r_match = re.search(r"['\"]?R['\"]?:\s*(.*?)(?=['\"]?C['\"]?:|$)", output_text, re.DOTALL | re.IGNORECASE)
+        r_match = re.search(r"['\"]?[RE]['\"]?:\s*(.*?)(?=['\"]?C['\"]?:|$)", output_text, re.DOTALL | re.IGNORECASE)
         if r_match:
             rationale = r_match.group(1).strip()
         else:
@@ -708,7 +760,7 @@ def parse_vlm_response(output_text: str, gen_kwargs: Dict[str, Any]) -> List[Tup
 def map_label(label_str: str, gen_kwargs: Dict[str, Any]) -> int:
     # Check for label mapping in gen_kwargs
     label_map = gen_kwargs.get("label_map", None)
-    label = 0
+    label = -1
     
     if label_map and isinstance(label_map, list):
         try:
@@ -716,9 +768,9 @@ def map_label(label_str: str, gen_kwargs: Dict[str, Any]) -> int:
             if label_str in label_map_upper:
                 label = label_map_upper.index(label_str)
             else:
-                label = 0 
+                label = -1 
         except ValueError:
-            label = 0
+            label = -1
     else:
         if label_str in ['T', 'P', '1']:
             label = 1
@@ -728,8 +780,29 @@ def map_label(label_str: str, gen_kwargs: Dict[str, Any]) -> int:
             try:
                 label = int(label_str)
             except:
-                label = 0 
+                label = -1 
     return label
+
+
+def infer_label_from_text(output_text: str, label_map: Optional[List[str]]) -> Optional[int]:
+    """
+    Best-effort label recovery for terse zero-shot answers such as "wild" or "1. lurcher".
+    Ambiguous text that mentions multiple labels returns None so vlm_query can retry.
+    """
+    if not label_map:
+        return None
+    text = str(output_text or "").strip()
+    if not text:
+        return None
+    found: List[int] = []
+    for idx, label in enumerate(label_map):
+        pattern = rf"\b{re.escape(str(label))}\b"
+        if re.search(pattern, text, flags=re.IGNORECASE):
+            found.append(int(idx))
+    found_unique = sorted(set(found))
+    if len(found_unique) == 1:
+        return int(found_unique[0])
+    return None
 
 
 def encode_image(image_path):
@@ -1338,10 +1411,13 @@ class APTMDL:
         self.lambda_c = lambda_c
         self.K_uncertainty = K_uncertainty
         # Explicit strategy switch:
-        # "mdl" keeps legacy MDL score, "entropy" uses Shannon entropy, "dts" uses CLIP+density-tree.
+        # "mdl" keeps legacy MDL score, "entropy" uses Shannon entropy,
+        # "dts" uses CLIP+density-tree, and "random" samples uniformly at random.
         self.selection_method = selection_method.lower()
-        if self.selection_method not in ("mdl", "entropy", "dts"):
+        if self.selection_method not in ("mdl", "entropy", "dts", "random", "zero_shot"):
             raise ValueError(f"Unsupported selection_method: {selection_method}")
+        if self.selection_method == "zero_shot":
+            self.S_2_template = "Classify the {N} images below based on the treatment. You should focus on six features for your classification: cellular organization, layering pattern, purkinje cells, granule cell layer, overall structure, and staining pattern. Your rationale should include descriptions of all six features. Your response must be given in the exact format for each image. 'R:' should indicate the textual explanation of the image based on the features described above. 'C:' should indicate the classification based on your rationale - either 'lurcher' for Lurcher mutant group or 'wild' for wild-type/normal. Be concise and specific. Do not include anything else in the output."
         self.mdl_tol = mdl_tol
         self.max_rounds = max_rounds
         self.candidate_pool_size = candidate_pool_size
@@ -2501,6 +2577,7 @@ class APTMDL:
         val_payload.setdefault("selection_method", selection_token)
         val_payload.setdefault("split", "validation")
         val_payload.setdefault("round_predictions", {})
+        invalid_output_stats: Dict[str, int] = {}
 
         def _build_val_records(
             current_preds: List[Optional[Tuple[Label, Caption]]],
@@ -2535,6 +2612,7 @@ class APTMDL:
         def _persist_val_progress(records: List[Dict[str, Any]]) -> bool:
             try:
                 val_payload["round_predictions"][round_key] = records
+                val_payload["invalid_output_stats"] = dict(invalid_output_stats)
                 with open(val_predictions_path, "w", encoding="utf-8") as f:
                     json.dump(val_payload, f, indent=2)
                 return True
@@ -2546,6 +2624,7 @@ class APTMDL:
         eval_gen_kwargs = dict(gen_kwargs)
         # Ensure VLM parsing uses the same label mapping as validation ground truth.
         eval_gen_kwargs["label_map"] = list(label_map)
+        eval_gen_kwargs["invalid_output_stats"] = invalid_output_stats
 
         preds: List[Optional[Tuple[Label, Caption]]] = [None] * len(eval_paths)
         resume_eval = bool(gen_kwargs.get("resume", False))
@@ -2635,7 +2714,7 @@ class APTMDL:
             y_true_labels=[int(y) for y in eval_labels],
             y_pred_labels=[int(y) if y is not None else None for y in pred_labels],
             label_map=list(label_map),
-            ignore_invalid_predictions=True,
+            ignore_invalid_predictions=False,
         )
 
         final_records = _build_val_records([tuple(p) for p in preds_final])
@@ -2654,6 +2733,7 @@ class APTMDL:
             "class_accuracy_pct": class_metrics["class_accuracy_pct"],
             "avg_class_accuracy_pct": class_metrics["avg_class_accuracy_pct"],
             "val_predictions_path": val_predictions_path,
+            "invalid_output_stats": dict(invalid_output_stats),
         }
 
     def _evaluate_test_subset(
@@ -2724,6 +2804,7 @@ class APTMDL:
         test_payload.setdefault("selection_method", selection_token)
         test_payload.setdefault("split", "test")
         test_payload.setdefault("round_predictions", {})
+        invalid_output_stats: Dict[str, int] = {}
 
         def _build_test_records(
             current_preds: List[Optional[Tuple[Label, Caption]]],
@@ -2761,6 +2842,7 @@ class APTMDL:
                 # Keep backward compatibility with earlier readers.
                 test_payload["round"] = int(round_num)
                 test_payload["predictions"] = records
+                test_payload["invalid_output_stats"] = dict(invalid_output_stats)
                 with open(test_predictions_path, "w", encoding="utf-8") as f:
                     json.dump(test_payload, f, indent=2)
                 return True
@@ -2771,6 +2853,7 @@ class APTMDL:
         query_batch_size = max(1, int(gen_kwargs.get("vlm_query_batch_size", 5)))
         eval_gen_kwargs = dict(gen_kwargs)
         eval_gen_kwargs["label_map"] = list(label_map)
+        eval_gen_kwargs["invalid_output_stats"] = invalid_output_stats
 
         preds: List[Optional[Tuple[Label, Caption]]] = [None] * len(eval_paths)
         resume_eval = bool(gen_kwargs.get("resume", False))
@@ -2863,7 +2946,7 @@ class APTMDL:
             y_true_labels=[int(y) for y in eval_labels],
             y_pred_labels=[int(y) if y is not None else None for y in pred_labels],
             label_map=list(label_map),
-            ignore_invalid_predictions=True,
+            ignore_invalid_predictions=False,
         )
 
         final_records = _build_test_records([tuple(p) for p in preds_final])
@@ -2882,11 +2965,60 @@ class APTMDL:
             "class_accuracy_pct": class_metrics["class_accuracy_pct"],
             "avg_class_accuracy_pct": class_metrics["avg_class_accuracy_pct"],
             "test_predictions_path": test_predictions_path,
+            "invalid_output_stats": dict(invalid_output_stats),
         }
 
     # -------------------------------------------------------
     # MAIN LOOP
     # -------------------------------------------------------
+    def run_zero_shot(
+        self,
+        test_data: Optional[List[LabeledExample]] = None,
+        **gen_kwargs,
+    ) -> PromptSet:
+        """
+        Run a test-only zero-shot baseline: system prompt/instructions plus test images,
+        with no seed prompts, active selection, validation, or oracle correction.
+        """
+        self.prompt_set = []
+        self.unlabeled_data = []
+        round_num = 0
+
+        test_eval_kwargs = dict(gen_kwargs)
+        test_eval_kwargs.pop("label_map", None)
+        test_metrics = self._evaluate_test_subset(
+            test_data=test_data or [],
+            round_num=round_num,
+            label_map=gen_kwargs.get("label_map"),
+            **test_eval_kwargs,
+        )
+        if test_metrics is None:
+            print("Zero-shot test evaluation skipped.")
+        else:
+            print(
+                f"Zero-shot test avg class accuracy: "
+                f"{float(test_metrics['avg_class_accuracy_pct']):.1f}% | "
+                f"classwise={test_metrics['class_accuracy_pct']} | "
+                f"sampled_per_class={test_metrics['sampled_per_class']} | "
+                f"predicted_per_class={test_metrics.get('predicted_per_class', {})} | "
+                f"invalid_output_stats={test_metrics.get('invalid_output_stats', {})} | "
+                f"pred_file={test_metrics.get('test_predictions_path', '')}"
+            )
+            try:
+                self._persist_final_test_results(
+                    test_metrics=test_metrics,
+                    **gen_kwargs,
+                )
+            except Exception as e:
+                print(f"Warning: failed to persist zero-shot test metrics: {e}")
+
+        if os.path.dirname(self.prompt_set_path):
+            os.makedirs(os.path.dirname(self.prompt_set_path), exist_ok=True)
+        with open(self.prompt_set_path, "w", encoding="utf-8") as f:
+            json.dump([], f, indent=4)
+
+        return self.prompt_set
+
     def run(
         self,
         unlabeled_data: List[LabeledExample],
@@ -2937,6 +3069,7 @@ class APTMDL:
                                 f"classwise={test_metrics['class_accuracy_pct']} | "
                                 f"sampled_per_class={test_metrics['sampled_per_class']} | "
                                 f"predicted_per_class={test_metrics.get('predicted_per_class', {})} | "
+                                f"invalid_output_stats={test_metrics.get('invalid_output_stats', {})} | "
                                 f"pred_file={test_metrics.get('test_predictions_path', '')}"
                             )
                             try:
@@ -3210,7 +3343,7 @@ class APTMDL:
                             print(f"Error writing to intra-round log: {e}")
 
                         pbar.update(1)
-            else:
+            elif self.selection_method == "entropy":
                 # Entropy-only selection score (APT-U Section 4).
                 with tqdm(total=len(all_candidates), initial=processed_count, desc="Calculating Scores") as pbar:
                     for i, entry in enumerate(all_candidates):
@@ -3229,6 +3362,31 @@ class APTMDL:
                         )
                         entry["score"] = s_x
                         candidate_scores.append((s_x, item))
+
+                        try:
+                            with open(intra_round_log_path, 'a', encoding='utf-8') as f:
+                                f.write(json.dumps(entry) + "\n")
+                        except Exception as e:
+                            print(f"Error writing to intra-round log: {e}")
+
+                        pbar.update(1)
+            else:
+                # Random selection: assign deterministic pseudo-random scores per image.
+                # This keeps behavior reproducible and resume-safe.
+                base_seed = int(self.diagnostic_seed) * 1000003 + int(r)
+                with tqdm(total=len(all_candidates), initial=processed_count, desc="Calculating Scores") as pbar:
+                    for i, entry in enumerate(all_candidates):
+                        if entry["score"] is not None:
+                            continue
+
+                        item = tuple(entry["item"])
+                        x, _ = item
+                        x_abs = os.path.abspath(str(x))
+                        digest = hashlib.sha256(f"{base_seed}|{x_abs}".encode("utf-8")).hexdigest()
+                        s_x = int(digest[:16], 16) / float(16 ** 16)
+
+                        entry["score"] = float(s_x)
+                        candidate_scores.append((float(s_x), item))
 
                         try:
                             with open(intra_round_log_path, 'a', encoding='utf-8') as f:
@@ -3858,6 +4016,15 @@ class APTMDL:
                     f"b_min_tiny={self.dts_b_min_tiny:.3f}, "
                     f"outlier_threshold={dts_outlier_threshold:.6f}"
                 )
+            elif self.selection_method == "random":
+                # Uniform random sampling without replacement from the current candidate pool U_r.
+                random_select_seed = int(self.diagnostic_seed) * 1000003 + int(r) + 7919
+                selected_items = random.Random(random_select_seed).sample(U_r, k=num_to_select)
+                A_r = [item[0] for item in selected_items]
+                print(
+                    f"Random selection used uniform sampling without replacement "
+                    f"(seed={random_select_seed})."
+                )
             else:
                 # MDL/entropy: plain top-score selection.
                 for i in range(num_to_select):
@@ -4050,6 +4217,7 @@ class APTMDL:
                         f"classwise={validation_metrics['class_accuracy_pct']} | "
                         f"sampled_per_class={validation_metrics['sampled_per_class']} | "
                         f"predicted_per_class={validation_metrics.get('predicted_per_class', {})} | "
+                        f"invalid_output_stats={validation_metrics.get('invalid_output_stats', {})} | "
                         f"pred_file={validation_metrics.get('val_predictions_path', '')}"
                     )
                     eval_log = dict(validation_metrics)
@@ -4133,6 +4301,7 @@ class APTMDL:
                 f"classwise={test_metrics['class_accuracy_pct']} | "
                 f"sampled_per_class={test_metrics['sampled_per_class']} | "
                 f"predicted_per_class={test_metrics.get('predicted_per_class', {})} | "
+                f"invalid_output_stats={test_metrics.get('invalid_output_stats', {})} | "
                 f"pred_file={test_metrics.get('test_predictions_path', '')}"
             )
             try:
@@ -4161,7 +4330,9 @@ def parse_arguments():
 
     # Parse known args to check for config file
     config_defaults = {}
-    args_temp, _ = parser.parse_known_args()
+    config_parser = argparse.ArgumentParser(add_help=False)
+    config_parser.add_argument("--config", type=str, default="config.json")
+    args_temp, _ = config_parser.parse_known_args()
     if args_temp.config and os.path.exists(args_temp.config):
         try:
             with open(args_temp.config, 'r') as f:
@@ -4217,8 +4388,8 @@ def parse_arguments():
                         help="Directory root for consolidated per-fold JSON summaries.")
 
     # Selection method and DTS parameters
-    parser.add_argument("--selection_method", type=str, required=True, choices=["mdl", "entropy", "dts"],
-                        help="Active-set scoring method: 'mdl', 'entropy' (Shannon entropy), or 'dts' (embedding density-tree).")
+    parser.add_argument("--selection_method", type=str, required=True, choices=["mdl", "entropy", "dts", "random", "zero_shot"],
+                        help="Method to run: active-set scoring via 'mdl', 'entropy', 'dts', or 'random', or test-only 'zero_shot'.")
     parser.add_argument("--dts_k", type=int, default=60,
                         help="k for DTS neighborhood graph construction.")
     parser.add_argument("--dts_k_rho", type=int, default=30,
@@ -4278,7 +4449,7 @@ def parse_arguments():
     parser.add_argument("--mdl_tol", type=float, default=1e-3,
                         help="Tolerance for MDL loss convergence.")
     parser.add_argument("--stopping_accuracy", type=float, default=90.0,
-                        help="Stop when validation average class accuracy (%) reaches this threshold.")
+                        help="Stop when validation average class accuracy (percent) reaches this threshold.")
     parser.add_argument("--max_rounds", type=int, default=20,
                         help="Maximum number of active learning rounds.")
     parser.add_argument("--candidate_pool_size", type=int, default=None,
@@ -4294,6 +4465,8 @@ def parse_arguments():
                         help="Batch size for VLM calls inside oracle_label_and_edit.")
     parser.add_argument("--vlm_timeout_s", type=float, default=120.0,
                         help="Per-request timeout (seconds) for VLM API calls.")
+    parser.add_argument("--invalid_output_max_retries", type=int, default=3,
+                        help="Total VLM attempts for invalid model outputs before marking predictions invalid.")
     parser.add_argument("--uncertainty_cache_path", type=str, default="logs/uncertainty_cache.jsonl",
                         help="Path to shared JSONL cache for stochastic label counts used by MDL/entropy.")
 
@@ -4334,6 +4507,8 @@ def parse_arguments():
         parser.error("--diagnostic_every must be a positive integer.")
     if args.max_images_per_panel <= 0:
         parser.error("--max_images_per_panel must be a positive integer.")
+    if args.invalid_output_max_retries <= 0:
+        parser.error("--invalid_output_max_retries must be a positive integer.")
     return args
 
 if __name__ == "__main__":
@@ -4472,12 +4647,19 @@ if __name__ == "__main__":
             stopping_accuracy=args.stopping_accuracy,
             active_set_batch_size=args.initial_batch_size,
         )
-        aptmdl.initialize_seed(args.init_prompts_path, args.dataset, fold=fold_num)
-        aptmdl.unlabeled_data = load_data(unlabeled_data_json_path, args.label_map)
-        print("Unlabeled data size: ", len(aptmdl.unlabeled_data))
+        if args.selection_method == "zero_shot":
+            aptmdl.prompt_set = []
+            aptmdl.initial_prompt_items = []
+            aptmdl.unlabeled_data = []
+            aptmdl.val_data = []
+            print("Zero-shot mode: skipping seed prompts, unlabeled data, validation, and oracle correction.")
+        else:
+            aptmdl.initialize_seed(args.init_prompts_path, args.dataset, fold=fold_num)
+            aptmdl.unlabeled_data = load_data(unlabeled_data_json_path, args.label_map)
+            print("Unlabeled data size: ", len(aptmdl.unlabeled_data))
 
-        aptmdl.val_data = load_data(val_json_path, args.label_map)
-        print("Validation data size: ", len(aptmdl.val_data))
+            aptmdl.val_data = load_data(val_json_path, args.label_map)
+            print("Validation data size: ", len(aptmdl.val_data))
         aptmdl.test_data = []
         if test_json_path and os.path.exists(test_json_path):
             aptmdl.test_data = load_data(test_json_path, args.label_map)
@@ -4488,32 +4670,43 @@ if __name__ == "__main__":
             else:
                 print("Warning: no test file path provided. Final test evaluation will be skipped.")
 
-        aptmdl.run(
-            unlabeled_data=aptmdl.unlabeled_data,
-            val_data=aptmdl.val_data,
-            test_data=aptmdl.test_data,
-            initial_batch_size=args.initial_batch_size,
-            selection_batch_size=args.selection_batch_size,
-            vlm_query_batch_size=args.vlm_query_batch_size,
-            vlm_timeout_s=args.vlm_timeout_s,
-            uncertainty_cache_path=args.uncertainty_cache_path,
-            model=args.model,
-            temperature=args.temperature,
-            max_tokens=args.max_tokens,
-            top_p=args.top_p,
-            label_map=args.label_map,
-            vlm_log_path=vlm_log_path,
-            debug=args.debug,
-            resume=args.resume,
-            checkpoint_path=checkpoint_path,
-            prompt_set_path=prompt_set_path,
-            dataset=args.dataset,
-            logs_dir=args.logs_dir,
-            val_results_root=args.val_results_root,
-            test_results_root=args.test_results_root,
-            results_root=args.results_root,
-            oracle_script_path=args.oracle_script_path,
-            oracle_dataset_name=args.oracle_dataset_name,
-            prompts_root=args.prompts_root,
-            fold=fold_num,
-        )
+        common_run_kwargs = {
+            "initial_batch_size": args.initial_batch_size,
+            "selection_batch_size": args.selection_batch_size,
+            "vlm_query_batch_size": args.vlm_query_batch_size,
+            "vlm_timeout_s": args.vlm_timeout_s,
+            "invalid_output_max_retries": args.invalid_output_max_retries,
+            "uncertainty_cache_path": args.uncertainty_cache_path,
+            "model": args.model,
+            "temperature": args.temperature,
+            "max_tokens": args.max_tokens,
+            "top_p": args.top_p,
+            "label_map": args.label_map,
+            "vlm_log_path": vlm_log_path,
+            "debug": args.debug,
+            "resume": args.resume,
+            "checkpoint_path": checkpoint_path,
+            "prompt_set_path": prompt_set_path,
+            "dataset": args.dataset,
+            "logs_dir": args.logs_dir,
+            "val_results_root": args.val_results_root,
+            "test_results_root": args.test_results_root,
+            "results_root": args.results_root,
+            "oracle_script_path": args.oracle_script_path,
+            "oracle_dataset_name": args.oracle_dataset_name,
+            "prompts_root": args.prompts_root,
+            "fold": fold_num,
+        }
+
+        if args.selection_method == "zero_shot":
+            aptmdl.run_zero_shot(
+                test_data=aptmdl.test_data,
+                **common_run_kwargs,
+            )
+        else:
+            aptmdl.run(
+                unlabeled_data=aptmdl.unlabeled_data,
+                val_data=aptmdl.val_data,
+                test_data=aptmdl.test_data,
+                **common_run_kwargs,
+            )

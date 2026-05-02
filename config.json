@@ -8,7 +8,7 @@
     "dts_mutual_knn": true,
     "initial_batch_size": 10,
     "candidate_pool_size": 100,
-    "max_rounds": 7,
+    "max_rounds": 4,
     "diagnostic_mode": false,
     "show_interactive": true,
     "diagnostic_every": 1,

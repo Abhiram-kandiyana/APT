@@ -29,6 +29,36 @@
     "random seed": 1024,
     "last round completed": 0
   },
+  "5_new": {
+    "prompt": {
+      "wild": [
+        6130
+      ],
+      "lurcher": [
+        5917
+      ]
+    },
+    "round-1": {
+      "wild": [
+        6134
+      ],
+      "lurcher": [
+        6350
+      ]
+    },
+    "test": {
+      "wild": [
+        6324
+      ],
+      "lurcher": [
+        6480
+      ]
+    },
+    "dataset_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x",
+    "test_dataset_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing",
+    "random seed": 1024,
+    "last round completed": 0
+  },
   "6": {
     "prompt": {
       "wild": [
