@@ -26,15 +26,17 @@ from pathlib import Path
 from datetime import datetime
 from utils import *
 
-# Initialize Tokenizer (globally to avoid reloading)
-# Using cl100k_base which is used by gpt-4, gpt-3.5-turbo, text-embedding-ada-002
-enc = tiktoken.get_encoding("cl100k_base")
+# Lazily initialized so non-MDL runs do not fetch/load tokenizer resources at import time.
+enc = None
 
 # Lazily initialized so DTS mode does not touch HuggingFace tokenizers at import time.
 st_model = None
 
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+_LOCAL_TRANSFORMERS_VLM_CACHE: Dict[Tuple[Any, ...], Dict[str, Any]] = {}
+_LOCAL_MLX_VLM_CACHE: Dict[Tuple[Any, ...], Dict[str, Any]] = {}
 
 # Short alias -> full Hugging Face model id for DTS image embeddings.
 DTS_CLIP_MODEL_ALIASES: Dict[str, str] = {
@@ -100,6 +102,244 @@ def _safe_path_token(value: Any, default: str = "unknown") -> str:
     token = re.sub(r"[^A-Za-z0-9._=-]+", "_", token)
     token = token.strip("._-")
     return token or default
+
+
+def _model_artifact_token(model_name: Optional[str]) -> str:
+    model = str(model_name or "").strip()
+    if not model:
+        return ""
+    return f"model={_safe_path_token(model.replace('/', '__'), default='local_vlm')}"
+
+
+def _resolve_vlm_backend(model_name: Optional[str], requested_backend: Optional[str] = None) -> str:
+    backend = str(requested_backend or "auto").strip().lower()
+    if backend not in ("auto", "openai", "transformers", "mlx"):
+        raise ValueError(f"Unsupported --vlm_backend '{requested_backend}'. Use auto, openai, transformers, or mlx.")
+    if backend != "auto":
+        return backend
+
+    model = str(model_name or "").strip()
+    if model.startswith("Qwen/") or os.path.exists(model):
+        return "transformers"
+    return "openai"
+
+
+def _torch_dtype_from_name(torch_module: Any, dtype_name: str, device: str) -> Any:
+    dtype = str(dtype_name or "auto").strip().lower()
+    if dtype == "auto":
+        if device == "mps":
+            return torch_module.float16
+        return "auto"
+    if dtype in ("float16", "fp16", "half"):
+        return torch_module.float16
+    if dtype in ("bfloat16", "bf16"):
+        return torch_module.bfloat16
+    if dtype in ("float32", "fp32", "full"):
+        return torch_module.float32
+    raise ValueError(f"Unsupported --local_vlm_dtype '{dtype_name}'.")
+
+
+def _get_local_transformers_vlm(**gen_kwargs) -> Dict[str, Any]:
+    model_name = str(gen_kwargs.get("model", "") or "").strip()
+    if not model_name:
+        raise ValueError("A Hugging Face model id or local model path is required for the transformers VLM backend.")
+
+    try:
+        import importlib.util
+        import torch
+        from transformers import AutoModelForImageTextToText, AutoProcessor
+    except Exception as e:
+        raise RuntimeError(
+            "Local Transformers VLM backend requires torch and transformers. "
+            "Install the missing packages in the Microscopy conda environment."
+        ) from e
+
+    requested_device = str(gen_kwargs.get("local_vlm_device", "auto") or "auto").strip().lower()
+    if requested_device == "auto":
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            device = "mps"
+        else:
+            device = "cpu"
+    else:
+        device = requested_device
+
+    dtype = _torch_dtype_from_name(torch, str(gen_kwargs.get("local_vlm_dtype", "auto") or "auto"), device)
+    min_pixels = int(gen_kwargs.get("local_vlm_min_pixels", 0) or 0)
+    max_pixels = int(gen_kwargs.get("local_vlm_max_pixels", 512 * 512) or 0)
+
+    cache_key = (
+        model_name,
+        device,
+        str(dtype),
+        min_pixels,
+        max_pixels,
+    )
+    cached = _LOCAL_TRANSFORMERS_VLM_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    processor_kwargs: Dict[str, Any] = {"trust_remote_code": True, "use_fast": False}
+    if min_pixels > 0:
+        processor_kwargs["min_pixels"] = min_pixels
+    if max_pixels > 0:
+        processor_kwargs["max_pixels"] = max_pixels
+
+    print(
+        f"Loading local VLM with Transformers: model={model_name}, device={device}, "
+        f"dtype={dtype}, max_pixels={max_pixels or 'default'}"
+    )
+    processor = AutoProcessor.from_pretrained(model_name, **processor_kwargs)
+    model_kwargs: Dict[str, Any] = {
+        "dtype": dtype,
+        "trust_remote_code": True,
+        "attn_implementation": "eager",
+    }
+    if importlib.util.find_spec("accelerate") is not None:
+        model_kwargs["low_cpu_mem_usage"] = True
+    model = AutoModelForImageTextToText.from_pretrained(model_name, **model_kwargs)
+    model.to(device)
+    model.eval()
+
+    loaded = {
+        "model": model,
+        "processor": processor,
+        "torch": torch,
+        "device": device,
+    }
+    _LOCAL_TRANSFORMERS_VLM_CACHE[cache_key] = loaded
+    return loaded
+
+
+def _to_qwen_content_item(item: Dict[str, Any]) -> Dict[str, Any]:
+    item_type = item.get("type")
+    if item_type == "text":
+        return {"type": "text", "text": str(item.get("text", ""))}
+    if item_type == "image_path":
+        return {"type": "image", "image": str(item.get("path", ""))}
+    raise ValueError(f"Unsupported local VLM content item: {item_type}")
+
+
+def _query_transformers_vlm(
+    content: List[Dict[str, Any]],
+    stochastic: bool,
+    **gen_kwargs,
+) -> str:
+    local = _get_local_transformers_vlm(**gen_kwargs)
+    model = local["model"]
+    processor = local["processor"]
+    torch = local["torch"]
+    device = local["device"]
+
+    messages = [{"role": "user", "content": [_to_qwen_content_item(item) for item in content]}]
+    inputs = processor.apply_chat_template(
+        messages,
+        add_generation_prompt=True,
+        tokenize=True,
+        return_dict=True,
+        return_tensors="pt",
+    )
+    inputs = inputs.to(device)
+    input_len = int(inputs["input_ids"].shape[-1])
+
+    max_new_tokens = int(gen_kwargs.get("max_tokens", 1000))
+    temperature = float(gen_kwargs.get("temperature", 1.0))
+    top_p = float(gen_kwargs.get("top_p", 1.0))
+    do_sample = bool(stochastic)
+    generate_kwargs: Dict[str, Any] = {
+        "max_new_tokens": max_new_tokens,
+        "do_sample": do_sample,
+    }
+    if do_sample:
+        generate_kwargs["temperature"] = max(1e-5, temperature)
+        generate_kwargs["top_p"] = top_p
+
+    with torch.no_grad():
+        generated_ids = model.generate(**inputs, **generate_kwargs)
+
+    generated_suffix = generated_ids[:, input_len:]
+    decoded = processor.batch_decode(generated_suffix, skip_special_tokens=True)
+    return decoded[0] if decoded else ""
+
+
+def _get_local_mlx_vlm(**gen_kwargs) -> Dict[str, Any]:
+    model_name = str(gen_kwargs.get("mlx_model_path") or gen_kwargs.get("model", "") or "").strip()
+    if not model_name:
+        raise ValueError("A local MLX model path is required for the mlx VLM backend.")
+
+    cache_key = (model_name,)
+    cached = _LOCAL_MLX_VLM_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        from mlx_vlm.utils import generate, load
+    except Exception as e:
+        raise RuntimeError(
+            "MLX backend could not initialize. Run this outside Codex in a normal Terminal "
+            "with Apple Metal access, or use --vlm_backend transformers."
+        ) from e
+
+    print(f"Loading local VLM with MLX: model={model_name}")
+    model, processor = load(model_name, lazy=False, trust_remote_code=True, use_fast=False)
+    loaded = {
+        "model": model,
+        "processor": processor,
+        "generate": generate,
+    }
+    _LOCAL_MLX_VLM_CACHE[cache_key] = loaded
+    return loaded
+
+
+def _query_mlx_vlm(
+    content: List[Dict[str, Any]],
+    stochastic: bool,
+    **gen_kwargs,
+) -> str:
+    local = _get_local_mlx_vlm(**gen_kwargs)
+    model = local["model"]
+    processor = local["processor"]
+    generate = local["generate"]
+
+    messages_content: List[Dict[str, Any]] = []
+    image_paths: List[str] = []
+    for item in content:
+        if item.get("type") == "text":
+            messages_content.append({"type": "text", "text": str(item.get("text", ""))})
+        elif item.get("type") == "image_path":
+            image_path = str(item.get("path", ""))
+            image_paths.append(image_path)
+            messages_content.append({"type": "image", "image": image_path})
+        else:
+            raise ValueError(f"Unsupported MLX content item: {item.get('type')}")
+
+    messages = [{"role": "user", "content": messages_content}]
+    if hasattr(processor, "apply_chat_template"):
+        prompt = processor.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+    elif hasattr(processor, "tokenizer") and hasattr(processor.tokenizer, "apply_chat_template"):
+        prompt = processor.tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+    else:
+        prompt_parts = [
+            str(item.get("text", ""))
+            for item in content
+            if item.get("type") == "text"
+        ]
+        prompt = "\n\n".join(part for part in prompt_parts if part)
+
+    max_new_tokens = int(gen_kwargs.get("max_tokens", 1000))
+    temperature = float(gen_kwargs.get("temperature", 1.0)) if stochastic else 0.0
+    mlx_kwargs: Dict[str, Any] = {
+        "max_tokens": max_new_tokens,
+        "temperature": temperature,
+        "verbose": False,
+    }
+    resize_shape = gen_kwargs.get("mlx_resize_shape")
+    if resize_shape:
+        if isinstance(resize_shape, (list, tuple)):
+            mlx_kwargs["resize_shape"] = tuple(int(v) for v in resize_shape)
+        else:
+            mlx_kwargs["resize_shape"] = (int(resize_shape), int(resize_shape))
+
+    return generate(model, processor, prompt, image=image_paths, **mlx_kwargs)
 
 
 _UNCERTAINTY_CACHE_MEM: Dict[str, Dict[str, Dict[str, Any]]] = {}
@@ -211,8 +451,8 @@ def _selection_artifact_token(
     candidate_pool_size: Optional[int] = None,
 ) -> str:
     selection = str(selection_method or "mdl").lower().strip()
-    if selection == "zero_shot":
-        return "zero_shot"
+    if selection in ("zero_shot", "one_shot"):
+        return selection
 
     batch_token = ""
     try:
@@ -559,8 +799,8 @@ def vlm_query(
     parse_kwargs = dict(gen_kwargs)
     parse_kwargs["expected_num_predictions"] = len(images)
     
-    # 1. Construct the message content
-    content = []
+    # 1. Construct backend-neutral message content
+    content: List[Dict[str, Any]] = []
     
     sp1_text = system_prompt_1
     # Format system prompt 2 with batch size
@@ -574,10 +814,9 @@ def vlm_query(
 
     # Few-shot exemplars
     for x_i, c_i in prompt_set:
-        base64_img = encode_image(x_i)
         content.append({
-            "type": "image_url",
-            "image_url": {"url": f"data:image/jpeg;base64,{base64_img}"}
+            "type": "image_path",
+            "path": str(x_i),
         })
         content.append({
             "type": "text",
@@ -592,10 +831,9 @@ def vlm_query(
 
     # Query image(s)
     for img in images:
-        base64_x = encode_image(img)
         content.append({
-            "type": "image_url",
-            "image_url": {"url": f"data:image/jpeg;base64,{base64_x}"}
+            "type": "image_path",
+            "path": str(img),
         })
 
     # 2. Call OpenAI API with retries
@@ -605,6 +843,7 @@ def vlm_query(
     max_tokens = gen_kwargs.get("max_tokens", 1000)
     top_p = gen_kwargs.get("top_p", 1.0)
     request_timeout_s = float(gen_kwargs.get("vlm_timeout_s", 120))
+    vlm_backend = _resolve_vlm_backend(model, gen_kwargs.get("vlm_backend", "auto"))
 
     max_retries = int(gen_kwargs.get("invalid_output_max_retries", 3) or 3)
     if max_retries <= 0:
@@ -613,14 +852,31 @@ def vlm_query(
     
     while retry_count < max_retries:
         try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": content}],
-                temperature=temperature,
-                max_tokens=max_tokens,
-                timeout=request_timeout_s,
-            )
-            output_text = response.choices[0].message.content
+            if vlm_backend == "transformers":
+                output_text = _query_transformers_vlm(content, stochastic=stochastic, **gen_kwargs)
+            elif vlm_backend == "mlx":
+                output_text = _query_mlx_vlm(content, stochastic=stochastic, **gen_kwargs)
+            else:
+                openai_content: List[Dict[str, Any]] = []
+                for item in content:
+                    if item.get("type") == "text":
+                        openai_content.append({"type": "text", "text": str(item.get("text", ""))})
+                    elif item.get("type") == "image_path":
+                        base64_img = encode_image(str(item.get("path", "")))
+                        openai_content.append({
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{base64_img}"}
+                        })
+                    else:
+                        raise ValueError(f"Unsupported OpenAI content item: {item.get('type')}")
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": openai_content}],
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    timeout=request_timeout_s,
+                )
+                output_text = response.choices[0].message.content
             lower_stripped = output_text.lower().strip()
             if lower_stripped == "" or ("i'm" in lower_stripped and ("can't" in lower_stripped or "can’t" in lower_stripped or "cannot" in lower_stripped or "unable" in lower_stripped)) or ("I'm unable" in lower_stripped):
                 print("Model returned an invalid/refusal response; retrying after delay.")
@@ -837,6 +1093,9 @@ def tokenizer(c: Caption) -> List[int]:
     BPE tokenizer using tiktoken (cl100k_base).
     Returns a list of token IDs.
     """
+    global enc
+    if enc is None:
+        enc = tiktoken.get_encoding("cl100k_base")
     return enc.encode(c)
 
 
@@ -1401,6 +1660,7 @@ class APTMDL:
         fold: int = None,
         stopping_accuracy: float = 90.0,
         active_set_batch_size: Optional[int] = None,
+        selection_artifact_token: Optional[str] = None,
     ):
         self.S_1 = load_files(system_prompt_1_path)
         # System prompt 2 is now a template string handled in code, not loaded from file
@@ -1414,7 +1674,7 @@ class APTMDL:
         # "mdl" keeps legacy MDL score, "entropy" uses Shannon entropy,
         # "dts" uses CLIP+density-tree, and "random" samples uniformly at random.
         self.selection_method = selection_method.lower()
-        if self.selection_method not in ("mdl", "entropy", "dts", "random", "zero_shot"):
+        if self.selection_method not in ("mdl", "entropy", "dts", "random", "zero_shot", "one_shot"):
             raise ValueError(f"Unsupported selection_method: {selection_method}")
         if self.selection_method == "zero_shot":
             self.S_2_template = "Classify the {N} images below based on the treatment. You should focus on six features for your classification: cellular organization, layering pattern, purkinje cells, granule cell layer, overall structure, and staining pattern. Your rationale should include descriptions of all six features. Your response must be given in the exact format for each image. 'R:' should indicate the textual explanation of the image based on the features described above. 'C:' should indicate the classification based on your rationale - either 'lurcher' for Lurcher mutant group or 'wild' for wild-type/normal. Be concise and specific. Do not include anything else in the output."
@@ -1433,12 +1693,15 @@ class APTMDL:
         self.dts_b_min_tiny = dts_b_min_tiny
         self.dts_tune_hparams = bool(dts_tune_hparams)
         self.dts_clip_model_name = _resolve_dts_clip_model_name(dts_clip_model_name)
-        self.selection_artifact_token = _selection_artifact_token(
-            selection_method=self.selection_method,
-            dts_clip_model_name=self.dts_clip_model_name,
-            active_set_batch_size=active_set_batch_size,
-            candidate_pool_size=self.candidate_pool_size,
-        )
+        if selection_artifact_token:
+            self.selection_artifact_token = str(selection_artifact_token)
+        else:
+            self.selection_artifact_token = _selection_artifact_token(
+                selection_method=self.selection_method,
+                dts_clip_model_name=self.dts_clip_model_name,
+                active_set_batch_size=active_set_batch_size,
+                candidate_pool_size=self.candidate_pool_size,
+            )
         self.dts_tuner_state = {
             "overmerged_streak": 0,
             "fragmented_streak": 0,
@@ -2120,6 +2383,73 @@ class APTMDL:
             "accuracy": init_acc,
         }
 
+    def load_fixed_prompt_set(self, prompt_set_json_path: str, label_map: Optional[List[str]] = None) -> None:
+        """
+        Load a fixed prompting baseline from a corrected prompt JSON file.
+        Expected shape: {"prompts": [{"image_path", "class", "rationale"/"explanation"}, ...]}.
+        """
+        if not prompt_set_json_path:
+            raise ValueError("prompt_set_json_path is required.")
+        if not os.path.exists(prompt_set_json_path):
+            raise FileNotFoundError(f"Fixed prompt set file not found: {prompt_set_json_path}")
+
+        with open(prompt_set_json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if not isinstance(data, dict) or not isinstance(data.get("prompts"), list):
+            raise ValueError(f"Fixed prompt set file must contain a list under 'prompts': {prompt_set_json_path}")
+
+        fixed_prompt_set: PromptSet = []
+        fixed_prompt_items: List[Dict[str, Any]] = []
+        class_counts: Dict[str, int] = {}
+        allowed_labels = {str(lbl).lower(): str(lbl) for lbl in (label_map or [])}
+
+        for raw_item in data.get("prompts", []):
+            if not isinstance(raw_item, dict):
+                continue
+            image_path = str(raw_item.get("image_path") or raw_item.get("path") or "").strip()
+            if not image_path:
+                continue
+            if not os.path.exists(image_path):
+                raise FileNotFoundError(f"Fixed prompt image not found: {image_path}")
+
+            label_raw = str(raw_item.get("class", raw_item.get("c", ""))).strip()
+            if allowed_labels:
+                label = allowed_labels.get(label_raw.lower(), "")
+                if not label:
+                    raise ValueError(
+                        f"Prompt label '{label_raw}' is not in label_map {list(label_map or [])}: {image_path}"
+                    )
+            else:
+                label = label_raw
+
+            rationale = raw_item.get("rationale")
+            if rationale is None:
+                rationale = raw_item.get("explanation", raw_item.get("e", ""))
+            rationale = "" if rationale is None else str(rationale).strip()
+            caption = f"{rationale} C: {label}".strip() if label else rationale
+
+            fixed_prompt_set.append((image_path, caption))
+            fixed_prompt_items.append({
+                "image_path": image_path,
+                "class": label,
+                "rationale": rationale,
+                "explanation": rationale,
+                "manual_corrected": bool(raw_item.get("manual_corrected", False)),
+            })
+            class_counts[str(label)] = int(class_counts.get(str(label), 0)) + 1
+
+        if not fixed_prompt_set:
+            raise ValueError(f"No usable prompts found in fixed prompt set file: {prompt_set_json_path}")
+
+        self.prompt_set = fixed_prompt_set
+        self.initial_prompt_items = fixed_prompt_items
+        self.initial_global_metrics = {}
+        print(
+            f"Fixed prompt set loaded from {prompt_set_json_path} with "
+            f"{len(self.prompt_set)} examples; class_counts={class_counts}"
+        )
+
     def _caption_to_label_index(self, caption: str, label_map: Optional[List[str]]) -> Optional[int]:
         if caption is None or not label_map:
             return None
@@ -2770,8 +3100,15 @@ class APTMDL:
         eval_paths: List[str] = []
         eval_labels: List[int] = []
         sampled_per_class: Dict[str, int] = {}
+        test_limit_per_class = gen_kwargs.get("test_limit_per_class", None)
+        if test_limit_per_class is not None:
+            test_limit_per_class = int(test_limit_per_class)
+            if test_limit_per_class <= 0:
+                test_limit_per_class = None
         for class_idx in sorted(by_class.keys()):
             picked = list(by_class[class_idx])
+            if test_limit_per_class is not None:
+                picked = picked[:test_limit_per_class]
             eval_paths.extend(picked)
             eval_labels.extend([class_idx] * len(picked))
             sampled_per_class[str(label_map[class_idx])] = int(len(picked))
@@ -2971,18 +3308,19 @@ class APTMDL:
     # -------------------------------------------------------
     # MAIN LOOP
     # -------------------------------------------------------
-    def run_zero_shot(
+    def run_fixed_prompting_baseline(
         self,
         test_data: Optional[List[LabeledExample]] = None,
         **gen_kwargs,
     ) -> PromptSet:
         """
-        Run a test-only zero-shot baseline: system prompt/instructions plus test images,
-        with no seed prompts, active selection, validation, or oracle correction.
+        Run a test-only fixed prompting baseline with no active selection, validation,
+        or oracle correction. Zero-shot uses an empty prompt_set; one-shot uses fixed
+        exemplars loaded before calling this method.
         """
-        self.prompt_set = []
         self.unlabeled_data = []
         round_num = 0
+        baseline_name = "Zero-shot" if self.selection_method == "zero_shot" else "One-shot"
 
         test_eval_kwargs = dict(gen_kwargs)
         test_eval_kwargs.pop("label_map", None)
@@ -2993,10 +3331,10 @@ class APTMDL:
             **test_eval_kwargs,
         )
         if test_metrics is None:
-            print("Zero-shot test evaluation skipped.")
+            print(f"{baseline_name} test evaluation skipped.")
         else:
             print(
-                f"Zero-shot test avg class accuracy: "
+                f"{baseline_name} test avg class accuracy: "
                 f"{float(test_metrics['avg_class_accuracy_pct']):.1f}% | "
                 f"classwise={test_metrics['class_accuracy_pct']} | "
                 f"sampled_per_class={test_metrics['sampled_per_class']} | "
@@ -3010,14 +3348,22 @@ class APTMDL:
                     **gen_kwargs,
                 )
             except Exception as e:
-                print(f"Warning: failed to persist zero-shot test metrics: {e}")
+                print(f"Warning: failed to persist {baseline_name.lower()} test metrics: {e}")
 
         if os.path.dirname(self.prompt_set_path):
             os.makedirs(os.path.dirname(self.prompt_set_path), exist_ok=True)
         with open(self.prompt_set_path, "w", encoding="utf-8") as f:
-            json.dump([], f, indent=4)
+            json.dump([(str(x), c) for x, c in self.prompt_set], f, indent=4)
 
         return self.prompt_set
+
+    def run_zero_shot(
+        self,
+        test_data: Optional[List[LabeledExample]] = None,
+        **gen_kwargs,
+    ) -> PromptSet:
+        self.prompt_set = []
+        return self.run_fixed_prompting_baseline(test_data=test_data, **gen_kwargs)
 
     def run(
         self,
@@ -4360,6 +4706,8 @@ def parse_arguments():
                         help="Path to validation json directory (optional if fold provided).")
     parser.add_argument("--test_json_path", type=str, default=None,
                         help="Path to test jsonl file (optional if fold provided).")
+    parser.add_argument("--test_limit_per_class", type=int, default=None,
+                        help="Optional smoke-test limit for test evaluation; default uses all test images.")
     parser.add_argument("--unlabeled_data_json_path", type=str, required=False,
                         help="Path to unlabeled data json file (optional if fold provided).")
     parser.add_argument("--vlm_log_path", type=str, default=None,
@@ -4388,8 +4736,11 @@ def parse_arguments():
                         help="Directory root for consolidated per-fold JSON summaries.")
 
     # Selection method and DTS parameters
-    parser.add_argument("--selection_method", type=str, required=True, choices=["mdl", "entropy", "dts", "random", "zero_shot"],
-                        help="Method to run: active-set scoring via 'mdl', 'entropy', 'dts', or 'random', or test-only 'zero_shot'.")
+    parser.add_argument("--selection_method", type=str, required=True, choices=["mdl", "entropy", "dts", "random", "zero_shot", "one_shot"],
+                        help="Method to run: active-set scoring via 'mdl', 'entropy', 'dts', or 'random', or test-only 'zero_shot'/'one_shot'.")
+    parser.add_argument("--one_shot_prompt_set_path", type=str,
+                        default="prompt_sets/microscopy_lurcher/one-shot-prompting/prompts_corrected.json",
+                        help="Corrected prompt JSON used by --selection_method one_shot.")
     parser.add_argument("--dts_k", type=int, default=60,
                         help="k for DTS neighborhood graph construction.")
     parser.add_argument("--dts_k_rho", type=int, default=30,
@@ -4473,6 +4824,20 @@ def parse_arguments():
     # VLM generation parameters (passed as gen_kwargs)
     parser.add_argument("--model", type=str, default="gpt-4o",
                         help="VLM model to use (e.g., gpt-4o).")
+    parser.add_argument("--vlm_backend", type=str, default="auto", choices=["auto", "openai", "transformers", "mlx"],
+                        help="VLM runtime backend. 'auto' uses Transformers for Qwen/* or local paths, otherwise OpenAI.")
+    parser.add_argument("--local_vlm_device", type=str, default="auto",
+                        help="Device for --vlm_backend transformers: auto, cpu, mps, or cuda.")
+    parser.add_argument("--local_vlm_dtype", type=str, default="auto",
+                        help="Torch dtype for --vlm_backend transformers: auto, float16, bfloat16, or float32.")
+    parser.add_argument("--local_vlm_min_pixels", type=int, default=0,
+                        help="Optional minimum image pixels passed to the local VLM processor.")
+    parser.add_argument("--local_vlm_max_pixels", type=int, default=512 * 512,
+                        help="Maximum image pixels passed to the local VLM processor; lower this if memory is tight.")
+    parser.add_argument("--mlx_model_path", type=str, default=None,
+                        help="Optional MLX model directory for --vlm_backend mlx; defaults to --model.")
+    parser.add_argument("--mlx_resize_shape", nargs='*', type=int, default=None,
+                        help="Optional MLX image resize shape, e.g. --mlx_resize_shape 336 or --mlx_resize_shape 336 336.")
     parser.add_argument("--temperature", type=float, default=0.7,
                         help="Sampling temperature for VLM generation.")
     parser.add_argument("--max_tokens", type=int, default=1000,
@@ -4509,6 +4874,14 @@ def parse_arguments():
         parser.error("--max_images_per_panel must be a positive integer.")
     if args.invalid_output_max_retries <= 0:
         parser.error("--invalid_output_max_retries must be a positive integer.")
+    if args.local_vlm_min_pixels < 0:
+        parser.error("--local_vlm_min_pixels must be non-negative.")
+    if args.local_vlm_max_pixels < 0:
+        parser.error("--local_vlm_max_pixels must be non-negative.")
+    if args.mlx_resize_shape is not None and len(args.mlx_resize_shape) not in (0, 1, 2):
+        parser.error("--mlx_resize_shape expects one integer or two integers.")
+    if args.mlx_resize_shape is not None and len(args.mlx_resize_shape) == 0:
+        args.mlx_resize_shape = None
     return args
 
 if __name__ == "__main__":
@@ -4601,6 +4974,9 @@ if __name__ == "__main__":
             active_set_batch_size=args.initial_batch_size,
             candidate_pool_size=args.candidate_pool_size,
         )
+        model_artifact_token = _model_artifact_token(args.model)
+        if model_artifact_token:
+            selection_artifact_token = f"{selection_artifact_token}_{model_artifact_token}"
 
         checkpoint_path = with_selection_suffix(checkpoint_path, selection_artifact_token)
         prompt_set_path = with_selection_suffix(prompt_set_path, selection_artifact_token)
@@ -4646,13 +5022,18 @@ if __name__ == "__main__":
             fold=fold_num,
             stopping_accuracy=args.stopping_accuracy,
             active_set_batch_size=args.initial_batch_size,
+            selection_artifact_token=selection_artifact_token,
         )
-        if args.selection_method == "zero_shot":
+        if args.selection_method in ("zero_shot", "one_shot"):
             aptmdl.prompt_set = []
             aptmdl.initial_prompt_items = []
             aptmdl.unlabeled_data = []
             aptmdl.val_data = []
-            print("Zero-shot mode: skipping seed prompts, unlabeled data, validation, and oracle correction.")
+            if args.selection_method == "one_shot":
+                aptmdl.load_fixed_prompt_set(args.one_shot_prompt_set_path, label_map=args.label_map)
+                print("One-shot mode: using fixed prompt set; skipping unlabeled data, validation, and oracle correction.")
+            else:
+                print("Zero-shot mode: skipping seed prompts, unlabeled data, validation, and oracle correction.")
         else:
             aptmdl.initialize_seed(args.init_prompts_path, args.dataset, fold=fold_num)
             aptmdl.unlabeled_data = load_data(unlabeled_data_json_path, args.label_map)
@@ -4678,6 +5059,13 @@ if __name__ == "__main__":
             "invalid_output_max_retries": args.invalid_output_max_retries,
             "uncertainty_cache_path": args.uncertainty_cache_path,
             "model": args.model,
+            "vlm_backend": args.vlm_backend,
+            "local_vlm_device": args.local_vlm_device,
+            "local_vlm_dtype": args.local_vlm_dtype,
+            "local_vlm_min_pixels": args.local_vlm_min_pixels,
+            "local_vlm_max_pixels": args.local_vlm_max_pixels,
+            "mlx_model_path": args.mlx_model_path,
+            "mlx_resize_shape": args.mlx_resize_shape,
             "temperature": args.temperature,
             "max_tokens": args.max_tokens,
             "top_p": args.top_p,
@@ -4691,6 +5079,7 @@ if __name__ == "__main__":
             "logs_dir": args.logs_dir,
             "val_results_root": args.val_results_root,
             "test_results_root": args.test_results_root,
+            "test_limit_per_class": args.test_limit_per_class,
             "results_root": args.results_root,
             "oracle_script_path": args.oracle_script_path,
             "oracle_dataset_name": args.oracle_dataset_name,
@@ -4698,8 +5087,8 @@ if __name__ == "__main__":
             "fold": fold_num,
         }
 
-        if args.selection_method == "zero_shot":
-            aptmdl.run_zero_shot(
+        if args.selection_method in ("zero_shot", "one_shot"):
+            aptmdl.run_fixed_prompting_baseline(
                 test_data=aptmdl.test_data,
                 **common_run_kwargs,
             )

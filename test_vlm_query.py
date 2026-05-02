@@ -82,7 +82,11 @@ class TestVLMQuery(unittest.TestCase):
 
     def test_tokenizer(self):
         text = "Hello, world!"
-        tokens = code_mdl.tokenizer(text)
+        mock_encoding = MagicMock()
+        mock_encoding.encode.return_value = [1, 2, 3]
+        code_mdl.enc = None
+        with patch('code_mdl.tiktoken.get_encoding', return_value=mock_encoding):
+            tokens = code_mdl.tokenizer(text)
         self.assertTrue(all(isinstance(token, int) for token in tokens))
         self.assertTrue(len(tokens) >= 2)
 
