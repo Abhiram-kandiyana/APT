@@ -19,14 +19,14 @@
     "debug": false,
     "resume": false,
     "stopping_accuracy": 80,
-    "results_root": "/Users/abhiramkandiyana/Microscopy/Microscopy/APT-MDL/results",
-    "dts_k": 20, 
+    "results_root": "results",
+    "dts_k": 20,
     "dts_k_rho": 10,
     "dts_k_t": 10,
-    "dts_k_b" : 8,
+    "dts_k_b": 8,
     "dts_mcluster_min": 6,
-    "dts_c_tiny": 1, 
+    "dts_c_tiny": 1,
     "dts_max_per_basin": 1,
-    "dts_deg_min_tiny" : 4,
-    "dts_b_min_tiny" : 0.6
+    "dts_deg_min_tiny": 4,
+    "dts_b_min_tiny": 0.6
 }
