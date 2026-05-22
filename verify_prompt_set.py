@@ -2,7 +2,7 @@ import json
 import os
 import sys
 
-# Mock code_mdl imports
+# Mock main imports
 # We just want to verify data loading and formatting
 from utils import load_data
 

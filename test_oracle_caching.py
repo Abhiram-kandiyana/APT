@@ -6,7 +6,7 @@ import shutil
 import sys
 from unittest.mock import MagicMock, patch
 
-# Mock dependencies before importing code_mdl
+# Mock dependencies before importing main
 sys.modules["sentence_transformers"] = MagicMock()
 sys.modules["tiktoken"] = MagicMock()
 sys.modules["transformers"] = MagicMock()
@@ -14,7 +14,7 @@ sys.modules["openai"] = MagicMock()
 sys.modules["PIL"] = MagicMock()
 sys.modules["PIL.Image"] = MagicMock()
 
-from code_mdl import APTMDL
+from main import APT
 
 class TestOracleCaching(unittest.TestCase):
     def setUp(self):
@@ -48,8 +48,8 @@ class TestOracleCaching(unittest.TestCase):
         with open(self.sp1_path, 'w') as f:
             f.write("System Prompt 1")
             
-        # Initialize APTMDL
-        self.aptmdl = APTMDL(
+        # Initialize APT
+        self.apt = APT(
             system_prompt_1_path=self.sp1_path,
             system_prompt_2_path="dummy", # Not used as file anymore
             selection_method="mdl",
@@ -57,12 +57,12 @@ class TestOracleCaching(unittest.TestCase):
             debug=False
         )
         # Mock prompt set
-        self.aptmdl.prompt_set = []
+        self.apt.prompt_set = []
 
     def tearDown(self):
         shutil.rmtree(self.test_dir)
 
-    @patch("code_mdl.vlm_query")
+    @patch("main.vlm_query")
     @patch("subprocess.run")
     def test_oracle_caching(self, mock_subprocess, mock_vlm_query):
         # Setup mocks
@@ -99,7 +99,8 @@ class TestOracleCaching(unittest.TestCase):
                 {
                     "image_path": self.new_image_path,
                     "class": "lurcher",
-                    "rationale": "Corrected rationale"
+                    "rationale": "Corrected rationale",
+                    "manual_corrected": True
                 }
             ]}
             with open(output_json_path, 'w') as f:
@@ -109,7 +110,7 @@ class TestOracleCaching(unittest.TestCase):
 
         # Run oracle_label_and_edit
         images = [self.cached_image_path, self.new_image_path]
-        results = self.aptmdl.oracle_label_and_edit(
+        results = self.apt.oracle_label_and_edit(
             images,
             label_map=["wild", "lurcher"],
             dataset="microscopy_lurcher",
@@ -139,6 +140,62 @@ class TestOracleCaching(unittest.TestCase):
         self.assertIsNotNone(new_entry)
         self.assertEqual(new_entry["class"], "lurcher")
         self.assertEqual(new_entry["rationale"], "Corrected rationale")
+
+
+    @patch("main.vlm_query")
+    @patch("subprocess.run")
+    def test_missing_oracle_path_falls_back_to_manual_correction(self, mock_subprocess, mock_vlm_query):
+        missing_oracle_path = os.path.join(self.test_dir, "missing_prompt_bank.json")
+        fake_tool_path = os.path.join(self.test_dir, "fake_correction_tool.py")
+        with open(fake_tool_path, "w") as f:
+            f.write("# test placeholder")
+
+        apt = APT(
+            system_prompt_1_path=self.sp1_path,
+            system_prompt_2_path="dummy",
+            selection_method="mdl",
+            oracle_path=missing_oracle_path,
+            debug=False,
+        )
+        apt.prompt_set = []
+
+        mock_vlm_query.return_value = [(0, "Initial VLM rationale")]
+
+        def side_effect(cmd, check):
+            self.assertEqual(cmd[1], fake_tool_path)
+            input_json_path = cmd[cmd.index("--input_json") + 1]
+            output_json_path = cmd[cmd.index("--output_json") + 1]
+            with open(input_json_path, "r") as f:
+                manual_items = json.load(f)
+            self.assertEqual(len(manual_items), 1)
+            self.assertEqual(manual_items[0]["image_path"], self.new_image_path)
+            self.assertEqual(manual_items[0]["label"], "wild")
+            corrected = [{
+                "image_path": self.new_image_path,
+                "label": "lurcher",
+                "rationale": "Manual corrected rationale",
+            }]
+            with open(output_json_path, "w") as f:
+                json.dump(corrected, f)
+
+        mock_subprocess.side_effect = side_effect
+
+        result = apt.oracle_label_and_edit(
+            self.new_image_path,
+            label_map=["wild", "lurcher"],
+            dataset="microscopy_lurcher",
+            round_num=1,
+            correction_tool_path=fake_tool_path,
+        )
+
+        self.assertEqual(result[0], 1)
+        self.assertIn("Manual corrected rationale", result[1])
+        self.assertTrue(os.path.exists(missing_oracle_path))
+        with open(missing_oracle_path, "r") as f:
+            updated_oracle_data = json.load(f)
+        self.assertEqual(len(updated_oracle_data), 1)
+        self.assertEqual(updated_oracle_data[0]["class"], "lurcher")
+        self.assertEqual(updated_oracle_data[0]["rationale"], "Manual corrected rationale")
 
 if __name__ == "__main__":
     unittest.main()

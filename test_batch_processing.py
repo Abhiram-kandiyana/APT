@@ -4,14 +4,14 @@ import os
 import sys
 import json
 
-# Add parent directory to path to import code_mdl
+# Add parent directory to path to import main
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Mock sentence_transformers before importing code_mdl to avoid loading heavy models/dependencies
+# Mock sentence_transformers before importing main to avoid loading heavy models/dependencies
 sys.modules['sentence_transformers'] = MagicMock()
 sys.modules['sentence_transformers'].SentenceTransformer = MagicMock()
 
-from code_mdl import vlm_query, parse_vlm_response, APTMDL, mdl_loss
+from main import vlm_query, parse_vlm_response, APT, mdl_loss
 
 class TestBatchProcessing(unittest.TestCase):
 
@@ -24,19 +24,19 @@ class TestBatchProcessing(unittest.TestCase):
         self.mock_response.choices = [self.mock_choice]
         self.mock_choice.message = self.mock_message
         
-        # Patch client in code_mdl
-        patcher = patch('code_mdl.client', self.mock_client)
+        # Patch client in main
+        patcher = patch('main.client', self.mock_client)
         self.mock_client_patch = patcher.start()
         self.mock_client.chat.completions.create.return_value = self.mock_response
         self.addCleanup(patcher.stop)
         
         # Patch encode_image to avoid file IO
-        patcher_enc = patch('code_mdl.encode_image', return_value="base64string")
+        patcher_enc = patch('main.encode_image', return_value="base64string")
         self.mock_encode = patcher_enc.start()
         self.addCleanup(patcher_enc.stop)
         
         # Patch text_encoder to avoid loading model
-        patcher_te = patch('code_mdl.text_encoder', return_value=[[0.1]*384])
+        patcher_te = patch('main.text_encoder', return_value=[[0.1]*384])
         self.mock_te = patcher_te.start()
         self.addCleanup(patcher_te.stop)
 
@@ -164,7 +164,7 @@ class TestBatchProcessing(unittest.TestCase):
 
     def test_mdl_loss_batching(self):
         # Mock vlm_query to avoid complexity
-        with patch('code_mdl.vlm_query') as mock_vlm:
+        with patch('main.vlm_query') as mock_vlm:
             mock_vlm.return_value = [(0, "R1"), (1, "R2")]
             
             val_data = [("img1.jpg", 0), ("img2.jpg", 1), ("img3.jpg", 0)]
@@ -173,7 +173,7 @@ class TestBatchProcessing(unittest.TestCase):
             sp2_template = "SP2 {N}"
             
             # Mock description_length to return 0
-            with patch('code_mdl.description_length', return_value=0.0):
+            with patch('main.description_length', return_value=0.0):
                 loss = mdl_loss(
                     prompt_set, val_data, sp1, sp2_template,
                     alpha=0.01, beta=0.1, lambda_mdl=0.1,

@@ -21,7 +21,7 @@ from numbers import Integral
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from code_mdl import APTMDL, _selection_artifact_token, vlm_query, with_selection_suffix
+from main import APT, _selection_artifact_token, vlm_query, with_selection_suffix
 
 
 def _resolve_root(path_value: str) -> str:
@@ -301,7 +301,7 @@ def _persist_test_payload(
 
 
 def _build_test_metrics(
-    aptmdl: APTMDL,
+    apt: APT,
     records: Sequence[Dict[str, Any]],
     label_map: List[str],
     round_num: int,
@@ -322,7 +322,7 @@ def _build_test_metrics(
 
         y_true = rec.get("ground_truth_label_idx")
         if not isinstance(y_true, Integral):
-            y_true = aptmdl._infer_label_from_path(image_path, label_map)
+            y_true = apt._infer_label_from_path(image_path, label_map)
         if y_true is None or int(y_true) < 0 or int(y_true) >= len(label_map):
             continue
         y_true_idx = int(y_true)
@@ -332,7 +332,7 @@ def _build_test_metrics(
             pred_raw = rec.get("pred_label_idx")
         if pred_raw is None:
             pred_raw = rec.get("pred_label")
-        y_pred = aptmdl._normalize_prediction_label(pred_raw, label_map)
+        y_pred = apt._normalize_prediction_label(pred_raw, label_map)
 
         eval_paths.append(image_path)
         y_true_labels.append(y_true_idx)
@@ -344,7 +344,7 @@ def _build_test_metrics(
         else:
             predicted_per_class[str(label_map[int(y_pred)])] += 1
 
-    class_metrics = aptmdl._summarize_class_metrics(
+    class_metrics = apt._summarize_class_metrics(
         image_paths=eval_paths,
         y_true_labels=y_true_labels,
         y_pred_labels=y_pred_labels,
@@ -481,7 +481,7 @@ def main() -> int:
         f"records={len(records)}, label_map={label_map}"
     )
 
-    aptmdl = APTMDL(
+    apt = APT(
         system_prompt_1_path=args.system_prompt_1,
         system_prompt_2_path=args.system_prompt_2,
         selection_method=selection_base,
@@ -500,33 +500,33 @@ def main() -> int:
         if not os.path.exists(ckpt_path):
             continue
         try:
-            aptmdl.load_checkpoint(ckpt_path)
-            if aptmdl.prompt_set:
+            apt.load_checkpoint(ckpt_path)
+            if apt.prompt_set:
                 loaded_from = f"checkpoint:{ckpt_path}"
                 break
         except Exception as e:
             print(f"Warning: failed to load checkpoint {ckpt_path}: {e}")
 
-    if not aptmdl.prompt_set:
+    if not apt.prompt_set:
         for prompt_path in prompt_set_candidates:
             if not os.path.exists(prompt_path):
                 continue
             try:
                 prompt_set = _load_prompt_set_from_file(prompt_path)
                 if prompt_set:
-                    aptmdl.prompt_set = prompt_set
+                    apt.prompt_set = prompt_set
                     loaded_from = f"prompt_set:{prompt_path}"
                     break
             except Exception as e:
                 print(f"Warning: failed to load prompt set {prompt_path}: {e}")
 
-    if not aptmdl.prompt_set:
+    if not apt.prompt_set:
         print(
             "ERROR: could not load prompt_set from checkpoint or final prompt set. "
             f"Checked checkpoints={checkpoint_candidates}, prompt_sets={prompt_set_candidates}"
         )
         return 1
-    print(f"Using prompt_set size={len(aptmdl.prompt_set)} from {loaded_from}")
+    print(f"Using prompt_set size={len(apt.prompt_set)} from {loaded_from}")
 
     invalid_indices = [i for i, rec in enumerate(records) if _looks_invalid_prediction(rec)]
     if args.max_requery is not None:
@@ -556,9 +556,9 @@ def main() -> int:
 
             batch_preds = vlm_query(
                 batch_paths,
-                aptmdl.S_1,
-                aptmdl.S_2_template,
-                aptmdl.prompt_set,
+                apt.S_1,
+                apt.S_2_template,
+                apt.prompt_set,
                 stochastic=False,
                 label_map=list(label_map),
                 model=args.model,
@@ -588,9 +588,9 @@ def main() -> int:
                 if isinstance(y_true_raw, Integral):
                     y_true_idx = int(y_true_raw)
                 else:
-                    y_true_idx = aptmdl._infer_label_from_path(image_path, label_map)
+                    y_true_idx = apt._infer_label_from_path(image_path, label_map)
 
-                y_pred = aptmdl._normalize_prediction_label(pred_raw, label_map)
+                y_pred = apt._normalize_prediction_label(pred_raw, label_map)
                 y_pred_idx = int(y_pred) if y_pred is not None else None
                 pred_label_name = (
                     str(label_map[y_pred_idx])
@@ -631,7 +631,7 @@ def main() -> int:
         )
 
         test_metrics = _build_test_metrics(
-            aptmdl=aptmdl,
+            apt=apt,
             records=records,
             label_map=label_map,
             round_num=target_round,

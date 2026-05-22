@@ -1,7 +1,7 @@
 """
 Comprehensive test for the BPE tokenizer implementation.
 """
-from code_mdl import tokenizer, caption_complexity
+from main import tokenizer, caption_complexity
 import numpy as np
 
 def test_tokenizer():

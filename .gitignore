@@ -9,8 +9,20 @@ __pycache__/
 *.tif
 
 # Runtime/output artifacts
-logs/
-diagnostics/
+logs/*
+!logs/.gitkeep
+diagnostics/*
+!diagnostics/.gitkeep
+models/*
+!models/.gitkeep
+prompt_sets/*
+!prompt_sets/.gitkeep
+results/*
+!results/.gitkeep
+test_results/*
+!test_results/.gitkeep
+val_results/*
+!val_results/.gitkeep
 *_old/
 *.log
 *.tmp
@@ -18,6 +30,10 @@ diagnostics/
 # Checkpoints and local state
 checkpoint*.json
 checkpoint*.jsonl
+final_prompt_set_*.json
+round-2-prompt_set*.json
+vlm_log*.json
+test_log.json
 *.ckpt
 *.pt
 *.pth

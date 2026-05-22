@@ -8,24 +8,23 @@ sys.modules["sentence_transformers"] = MagicMock()
 sys.modules["openai"] = MagicMock()
 sys.modules["dotenv"] = MagicMock()
 sys.modules["torch"] = MagicMock()
-sys.modules["numpy"] = MagicMock()
 
 # Now import the module
-import code_mdl
-from code_mdl import APTMDL
+import main
+from main import APT
 
 def test_fold_argument_logic():
     print("Testing Fold Argument Logic with Mocks...")
     
-    # Test 1: Log Filename Construction in APTMDL
+    # Test 1: Log Filename Construction in APT
     dataset = "microscopy_lurcher"
     fold = 6
     K = 5
     
     # Mock load_files to avoid file system dependency for this test
-    code_mdl.load_files = MagicMock(return_value="dummy prompt")
+    main.load_files = MagicMock(return_value="dummy prompt")
     
-    apt = APTMDL(
+    apt = APT(
         system_prompt_1_path="dummy1",
         system_prompt_2_path="dummy2",
         K_uncertainty=K,

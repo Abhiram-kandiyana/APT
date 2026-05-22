@@ -1,4 +1,4 @@
-from code_mdl import load_files
+from main import load_files
 import os
 
 def test_load():

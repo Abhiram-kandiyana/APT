@@ -6,7 +6,7 @@ import numpy as np
 import shutil
 import tempfile
 
-# Mock external dependencies before importing code_mdl to avoid environment issues
+# Mock external dependencies before importing main to avoid environment issues
 sys.modules['sentence_transformers'] = MagicMock()
 sys.modules['tiktoken'] = MagicMock()
 sys.modules['openai'] = MagicMock()
@@ -15,7 +15,7 @@ sys.modules['tqdm'] = MagicMock()
 # Add current directory to path
 sys.path.append(os.getcwd())
 
-from code_mdl import selection_score, caption_complexity, uncertainty, expected_caption_complexity
+from main import selection_score, caption_complexity, uncertainty, expected_caption_complexity
 
 class TestSingleSelection(unittest.TestCase):
     def setUp(self):
@@ -34,9 +34,9 @@ class TestSingleSelection(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.test_dir)
 
-    @patch('code_mdl.vlm_query')
-    @patch('code_mdl.text_encoder')
-    @patch('code_mdl.tokenizer')
+    @patch('main.vlm_query')
+    @patch('main.text_encoder')
+    @patch('main.tokenizer')
     def test_single_selection_score(self, mock_tokenizer, mock_text_encoder, mock_vlm_query):
         # Setup mocks
         mock_tokenizer.side_effect = lambda x: [1] * len(x) # length 1 for simplicity
@@ -105,7 +105,7 @@ class TestSingleSelection(unittest.TestCase):
         # ...
         # vlm_query(x, ...) -> vlm_query receives string.
         # But wait, lines 507 append to batch_to_query.
-        # Let's check `uncertainty` implementation in code_mdl.py for single item path.
+        # Let's check `uncertainty` implementation in main.py for single item path.
         
         # In `uncertainty` (now modified to handle both):
         # is_batch = False (since x is string)
@@ -114,14 +114,14 @@ class TestSingleSelection(unittest.TestCase):
         #   batch_to_query = []
         #   loop over images (length 1):
         #     batch_to_query.append(img)
-        #   vlm_query(batch_to_query, ...) 
-        # So vlm_query is called with a LIST of length 1 even for single item input, 
+        #   vlm_query(batch_to_query, ...)
+        # So vlm_query is called with a LIST of length 1 even for single item input,
         # because I changed uncertainty to support batching internally and always use list for `vlm_query`?
-        # Let's check lines 498-515 in code_mdl.py. 
+        # Let's check lines 498-515 in main.py.
         # Yes: `batch_to_query.append(img)` then `vlm_query(batch_to_query, ...)`
-        
+
         # So vlm_query receives a list [img_path].
-        
+
         passed_arg = args[0]
         self.assertIsInstance(passed_arg, list)
         self.assertEqual(len(passed_arg), 1)

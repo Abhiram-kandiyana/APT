@@ -10,24 +10,23 @@ sys.modules['sentence_transformers'] = MagicMock()
 sys.modules['tiktoken'] = MagicMock()
 sys.modules['openai'] = MagicMock()
 sys.modules['dotenv'] = MagicMock()
-sys.modules['numpy'] = MagicMock()
 
-# Now import code_mdl
-from code_mdl import APTMDL
+# Now import main
+from main import APT
 
 class TestOracleIntegration(unittest.TestCase):
-    @patch('code_mdl.load_files')
+    @patch('main.load_files')
     def setUp(self, mock_load_files):
         mock_load_files.return_value = "Dummy System Prompt"
-        # Initialize APTMDL with dummy paths
-        self.aptmdl = APTMDL(
+        # Initialize APT with dummy paths
+        self.apt = APT(
             system_prompt_1_path="dummy_sp1.md",
             system_prompt_2_path="dummy_sp2.md",
             selection_method="mdl",
             debug=False # We want to test the real path
         )
         
-    @patch('code_mdl.vlm_query')
+    @patch('main.vlm_query')
     @patch('subprocess.run')
     def test_oracle_label_and_edit(self, mock_subprocess, mock_vlm_query):
         # Setup mocks
@@ -81,7 +80,7 @@ class TestOracleIntegration(unittest.TestCase):
         gen_kwargs = {"label_map": ["wild", "lurcher"], "dataset": "microscopy_lurcher", "round_num": 1}
         
         # Run method
-        results = self.aptmdl.oracle_label_and_edit(images, **gen_kwargs)
+        results = self.apt.oracle_label_and_edit(images, **gen_kwargs)
         
         # Verify Results
         # Image 1: Changed to lurcher (idx 1)
