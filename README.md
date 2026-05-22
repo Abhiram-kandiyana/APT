@@ -2,7 +2,7 @@
 
 Active Prompt Tuning (APT) is an active-learning workflow for improving visual language model prompts on microscopy classification tasks. APT starts from a small set of expert seed examples, uses a VLM to classify validation and candidate images, selects the next useful examples to add to the prompt, sends those examples through an oracle correction step, and repeats until validation performance reaches a target or the run reaches the round limit.
 
-The current implementation is centered on `code_mdl.py`. It supports several selection strategies:
+The current implementation is centered on `main.py`. It supports several selection strategies:
 
 - `dts`: density-threshold sampling over image embeddings.
 - `mdl`: minimum-description-length scoring.
@@ -13,7 +13,7 @@ The current implementation is centered on `code_mdl.py`. It supports several sel
 
 ## Quick Start
 
-Create a small environment for APT rather than reusing the full Microscopy conda environment.
+Create an environment for APT.
 
 ```bash
 conda create -n apt python=3.9
@@ -27,12 +27,12 @@ Set your OpenAI API key if you are using the OpenAI VLM backend:
 export OPENAI_API_KEY="..."
 ```
 
-You can also place the key in a local `.env` file because `code_mdl.py` calls `load_dotenv()`.
+You can also place the key in a local `.env` file because `main.py` calls `load_dotenv()`.
 
-Run the current microscopy Lurcher DTS configuration for one fold:
+An example of a run for the current microscopy Lurcher dataset with APT-DTS configuration for one fold:
 
 ```bash
-python code_mdl.py \
+python main.py \
   --config config.json \
   --dataset microscopy_lurcher \
   --fold 5 \
@@ -43,7 +43,7 @@ python code_mdl.py \
 Run several folds in one command:
 
 ```bash
-python code_mdl.py \
+python main.py \
   --config config.json \
   --dataset microscopy_lurcher \
   --folds 5,6,8,10 \
@@ -52,69 +52,6 @@ python code_mdl.py \
 ```
 
 `config.json` stores the project defaults used by the current experiments. Any CLI argument passed explicitly overrides the value loaded from the config file. `--selection_method` should still be passed on the command line because the argument is marked as required by the parser.
-
-## Data Layout
-
-APT expects fold-scoped JSONL files under:
-
-```text
-datasets/<dataset_name>/fold-<fold_number>/
-  train.jsonl
-  val.jsonl
-  val_selected.jsonl
-  test.jsonl
-```
-
-Each JSONL row should contain an image path and a class label:
-
-```json
-{"image_path": "/absolute/path/to/image.jpg", "class": "lurcher"}
-```
-
-For the active-learning modes, `train.jsonl` is treated as the unlabeled candidate pool, `val_selected.jsonl` is preferred for validation when present, and `test.jsonl` is used for the final test evaluation. If `val_selected.jsonl` does not exist, the code falls back to `val.jsonl`.
-
-Seed prompts are loaded from:
-
-```text
-init_prompts/<dataset_name>_fold=<fold_number>.json
-```
-
-System prompts are loaded from the paths passed through `--system_prompt_1` and `--system_prompt_2`; the microscopy defaults are:
-
-```text
-system_prompts/microscopy_lurcher_1.md
-system_prompts/microscopy_lurcher_2.md
-```
-
-For a new dataset, create the fold JSONL files, create a matching seed-prompt JSON file, add or pass dataset-specific system prompts, and pass a label map:
-
-```bash
-python code_mdl.py \
-  --dataset my_dataset \
-  --fold 1 \
-  --selection_method dts \
-  --label_map class_a class_b \
-  --system_prompt_1 system_prompts/my_dataset_1.md \
-  --system_prompt_2 system_prompts/my_dataset_2.md
-```
-
-The current code automatically sets `--label_map wild lurcher` only when `--dataset microscopy_lurcher`.
-
-## Oracle Correction
-
-During active-learning runs, APT writes the selected examples for each round to `prompt_sets/`, then calls an external oracle correction script. By default the code looks for:
-
-```text
-../APT-v3/oracle.py
-```
-
-Use `--oracle_script_path` if the oracle script lives elsewhere. Use `--oracle_path` for the prompt-bank or oracle-cache file that should be passed to the oracle and updated after corrections. The current `config.json` points at the local Lurcher prompt bank used in the existing experiments; collaborators on another machine should usually override this path.
-
-For a dry run that skips the external oracle and writes passthrough corrected prompts, add:
-
-```bash
---debug
-```
 
 ## Command-Line Arguments
 
@@ -141,6 +78,9 @@ Input and output paths:
 - `--checkpoint_path`: checkpoint output path; a selection suffix is added.
 - `--prompt_set_path`: final prompt-set output path; a selection suffix is added.
 - `--vlm_log_path`: VLM response log path; a selection suffix is added.
+- `--oracle_path`: prompt bank or oracle-cache JSON path; if this path is missing, APT falls back to manual correction.
+- `--oracle_script_path`: optional path to APT-v3/oracle.py.
+- `--correction_tool_path`: optional path to `apt_correction_tool_v2.py` for manual correction fallback.
 - `--logs_dir`: logs and intra-round checkpoints.
 - `--prompts_root`: pre/post-oracle prompt files.
 - `--val_results_root`: per-round validation predictions.
@@ -211,10 +151,99 @@ Baselines:
 - `--selection_method zero_shot`: skips seed prompts, unlabeled data, validation, and oracle correction, then evaluates on the test set.
 - `--selection_method one_shot`: loads `--one_shot_prompt_set_path`, skips active selection, and evaluates on the test set.
 
+## Data Layout
+
+APT expects a JSONL file scoped for each fold under:
+
+```text
+datasets/<dataset_name>/fold-<fold_number>/
+  train.jsonl
+  val.jsonl
+  val_selected.jsonl
+  test.jsonl
+```
+
+Each JSONL row should contain an image path and a class label:
+
+```json
+{"image_path": "/absolute/path/to/image.jpg", "class": "lurcher"}
+```
+
+For the active-learning modes, `train.jsonl` is treated as the unlabeled candidate pool, `val_selected.jsonl` is preferred for validation when present, and `test.jsonl` is used for the final test evaluation. If `val_selected.jsonl` does not exist, the code falls back to `val.jsonl`.
+
+Seed prompts are loaded from:
+
+```text
+init_prompts/<dataset_name>_fold=<fold_number>.json
+```
+
+System prompts are loaded from the paths passed through `--system_prompt_1` and `--system_prompt_2`; the microscopy defaults are:
+
+```text
+system_prompts/microscopy_lurcher_1.md
+system_prompts/microscopy_lurcher_2.md
+```
+
+For a new dataset, create the fold JSONL files, create a matching seed-prompt JSON file, add or pass dataset-specific system prompts, and pass a label map:
+
+```bash
+python main.py \
+  --dataset my_dataset \
+  --fold 1 \
+  --selection_method dts \
+  --label_map class_a class_b \
+  --system_prompt_1 system_prompts/my_dataset_1.md \
+  --system_prompt_2 system_prompts/my_dataset_2.md
+```
+
+The current code automatically sets `--label_map wild lurcher` only when `--dataset microscopy_lurcher`.
+
+## Oracle Correction
+
+In every active-learning round, APT asks the VLM to classify the selected active-set images and writes those raw predictions to a pre-correction prompt file under `prompt_sets/`. It then calls the external oracle script to turn those raw predictions into corrected prompt examples for the next round.
+
+By default APT calls:
+
+```text
+../APT-v3/oracle.py
+```
+
+The paths written for a round look like:
+
+```text
+prompt_sets/<dataset_name>/fold-<fold>_<selection>/fold<fold>_round<round>_prompts_<selection>.json
+prompt_sets/<dataset_name>/fold-<fold>_<selection>/fold<fold>_round<round>_prompts_<selection>_corrected.json
+```
+
+The oracle script has two correction modes:
+
+1. Prompt-bank correction: if a prompt bank is available, the script tries to replace the VLM rationale with a trusted caption from the bank. It first checks for the exact image. If that image is not present, it falls back to an anatomically close image when possible, currently based on parsed microscopy filename metadata such as the same case, slide, and tissue section. If the VLM predicted the wrong class, the oracle output also updates the class to the inferred ground truth.
+2. Manual correction: if a wrong prediction cannot be resolved from the prompt bank, the oracle script queues it for the manual correction tool (`apt_correction_tool_v2.py`). Manually corrected entries are marked with `manual_corrected: true`, and APT can merge those corrections back into the oracle cache or prompt bank when `--oracle_path` is supplied.
+
+Use `--oracle_path` to pass a specific prompt bank or oracle-cache JSON file:
+
+```bash
+python main.py \
+  --dataset microscopy_lurcher \
+  --fold 5 \
+  --selection_method dts \
+  --oracle_path /path/to/LurcherData_prompt_bank.json
+```
+
+If `--oracle_path` points to an existing file, APT calls `oracle.py` with that file as `--prompt_bank_path`. If `--oracle_path` is omitted at the class/API level, APT preserves the older behavior and calls `oracle.py` without an explicit prompt-bank path, letting that script try to auto-resolve one from `APT-v3`. In normal CLI runs, the default `--oracle_path` is `oracle.json`; if that file does not exist, or if the user passes any missing/invalid prompt-bank path, APT skips prompt-bank correction and launches the manual correction tool directly. The manual corrections are written to the normal corrected prompt file and then merged into the oracle cache at `--oracle_path`.
+
+Use `--oracle_script_path` if the oracle script lives somewhere else. Use `--correction_tool_path` if the manual correction GUI is not at `apt_correction_tool_v2.py` in this repository. The current `config.json` points at the local Lurcher prompt bank used in the existing experiments; collaborators using another dataset should override `--oracle_path` with their own bank/cache path, or let the missing path trigger manual correction for a new cache.
+
+For a dry run that skips the external oracle and writes passthrough corrected prompts, add:
+
+```bash
+--debug
+```
+
 ## Project Structure
 
 ```text
-code_mdl.py                  Main APT runner and CLI.
+main.py                      Main APT runner and CLI.
 config.json                  Current experiment defaults.
 utils.py                     JSONL loading, label extraction, split helpers.
 dts_sampling.py              DTS embedding and candidate scoring utilities.
@@ -252,10 +281,118 @@ Typical outputs include:
 
 ## Notes For New Datasets
 
-1. Put images somewhere stable and use absolute `image_path` values in the JSONL files.
-2. Create `train.jsonl`, `val.jsonl` or `val_selected.jsonl`, and `test.jsonl` for each fold.
-3. Create `init_prompts/<dataset>_fold=<fold>.json` with seed examples.
-4. Write system prompts that describe the task, expected rationale, and exact label vocabulary.
-5. Pass `--label_map` for every dataset that is not `microscopy_lurcher`.
-6. Override `--oracle_script_path` and `--oracle_path` if the default local APT-v3 oracle paths are not valid.
-7. Start with `--debug` or `--test_limit_per_class` for a smoke test before running a full active-learning experiment.
+### Choose A Dataset Key
+
+Pick a short dataset key and use it consistently. The current example is `microscopy_lurcher`; if your dataset key is `my_dataset`, APT will look for dataset files, seed prompts, outputs, and prompt sets using that exact token.
+
+The dataset key appears in these places:
+
+```text
+--dataset my_dataset
+datasets/my_dataset/fold-1/train.jsonl
+init_prompts/my_dataset_fold=1.json
+prompt_sets/my_dataset/...
+results/my_dataset/...
+val_results/my_dataset/...
+test_results/my_dataset/...
+```
+
+Avoid spaces and punctuation in the dataset key. Use lowercase letters, numbers, and underscores.
+
+### Create The Dataset Directory
+
+Create one subdirectory per fold under `datasets/<dataset_key>/`:
+
+```text
+datasets/my_dataset/
+  fold-1/
+    train.jsonl
+    val.jsonl
+    val_selected.jsonl
+    test.jsonl
+  fold-2/
+    train.jsonl
+    val.jsonl
+    val_selected.jsonl
+    test.jsonl
+```
+
+For active-learning runs, `train.jsonl` is the candidate pool. The examples are treated as unlabeled during selection, even though the file still contains class labels for bookkeeping and evaluation helpers. `val_selected.jsonl` is preferred for validation if present; otherwise APT uses `val.jsonl`. `test.jsonl` is used for final evaluation after the active-learning rounds finish.
+
+Each row should be newline-delimited JSON with an image path and a class label:
+
+```json
+{"image_path": "/absolute/path/to/image.jpg", "class": "class_a"}
+```
+
+Absolute image paths are the least ambiguous option. If you use relative paths, make sure they resolve correctly from the repository root when you run `python main.py`.
+
+### Add Seed Prompts
+
+Create one seed-prompt file per fold:
+
+```text
+init_prompts/my_dataset_fold=1.json
+init_prompts/my_dataset_fold=2.json
+```
+
+The filename must match the `--dataset` value and fold number. These seed prompts are the initial examples APT uses before it starts selecting new examples.
+
+### Add System Prompts
+
+Create dataset-specific system prompts, for example:
+
+```text
+system_prompts/my_dataset_1.md
+system_prompts/my_dataset_2.md
+```
+
+The prompts should define the classification task, the visual/anatomical features the VLM should inspect, the exact output format, and the allowed labels. Pass these paths in the run command:
+
+```bash
+python main.py \
+  --dataset my_dataset \
+  --fold 1 \
+  --selection_method dts \
+  --label_map class_a class_b \
+  --system_prompt_1 system_prompts/my_dataset_1.md \
+  --system_prompt_2 system_prompts/my_dataset_2.md
+```
+
+Only `microscopy_lurcher` gets an automatic label map (`wild lurcher`). Every other dataset should pass `--label_map` explicitly and keep those labels consistent with the `class` values in the JSONL files and with the labels requested in the system prompts.
+
+### Configure Oracle Correction
+
+For a dataset with an existing prompt bank, pass it explicitly:
+
+```bash
+--oracle_path /path/to/MyDataset_prompt_bank.json
+```
+
+For a new dataset, you can start without a prompt bank. Pass the path where you want the new oracle cache to live, even if it does not exist yet:
+
+```bash
+--oracle_path oracle_my_dataset.json
+```
+
+Because the file is missing on the first run, APT will launch manual correction for the selected images and then create/update that JSON file with the corrected examples. Later runs can reuse the same path as a growing oracle cache. If you already have a prompt bank, pass that existing file instead to enable prompt-bank correction before manual fallback.
+
+Use `--debug` for an initial smoke test when you want to verify file paths, fold loading, and output writing without launching the external correction workflow.
+
+### Smoke-Test Before A Full Run
+
+Start with one fold and a small test cap:
+
+```bash
+python main.py \
+  --dataset my_dataset \
+  --fold 1 \
+  --selection_method dts \
+  --label_map class_a class_b \
+  --system_prompt_1 system_prompts/my_dataset_1.md \
+  --system_prompt_2 system_prompts/my_dataset_2.md \
+  --test_limit_per_class 2 \
+  --debug
+```
+
+After the smoke test, inspect the generated files under `prompt_sets/`, `val_results/`, `test_results/`, `results/`, and `logs/`. Then remove `--debug`, set the correct oracle paths, and run the full experiment.

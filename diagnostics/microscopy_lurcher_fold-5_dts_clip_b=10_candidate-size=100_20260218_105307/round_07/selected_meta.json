@@ -1,0 +1,67 @@
+{
+  "selected_indices": [
+    84,
+    59,
+    64,
+    12,
+    74,
+    58,
+    22,
+    77,
+    55,
+    61
+  ],
+  "selected_boundary_scores": [
+    0.875,
+    0.625,
+    0.8571428656578064,
+    0.375,
+    0.625,
+    0.375,
+    0.375,
+    0.25,
+    0.375,
+    0.25
+  ],
+  "selected_basin_ids": [
+    71,
+    15,
+    71,
+    15,
+    71,
+    15,
+    71,
+    15,
+    71,
+    15
+  ],
+  "selected_basin_ids_eff": [
+    71,
+    15,
+    71,
+    15,
+    71,
+    15,
+    71,
+    15,
+    71,
+    15
+  ],
+  "selected_paths": [
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6353/6353_wild_10x_wild_3_3_Image_02.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6353/6353_wild_10x_wild_2_1_Image_02.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/5973/5973_wild_10x_wild_4_2_Image_05.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6349/6349_wild_10x_wild_1_3_Image_13.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6928/6928_wild_4_3_Image_03.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6483/6483_wild_10x_wild_1_1_Image_19.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6510/6510_lurcher_1_3_Image_02.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6483/6483_wild_10x_wild_1_1_Image_04.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6928/6928_wild_3_3_Image_04.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6133/6133_wild_2_2_Image_12.jpg"
+  ],
+  "selected_pairwise_cosine_summary": {
+    "selected_cos_sim_max": 0.9810750484466553,
+    "selected_cos_sim_median": 0.9562342166900635,
+    "selected_cos_sim_p90": 0.9704848289489746
+  }
+}

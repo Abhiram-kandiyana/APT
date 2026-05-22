@@ -1,0 +1,67 @@
+{
+  "selected_indices": [
+    49,
+    73,
+    43,
+    95,
+    84,
+    37,
+    48,
+    88,
+    17,
+    45
+  ],
+  "selected_boundary_scores": [
+    0.8333333134651184,
+    0.75,
+    0.5,
+    0.75,
+    0.375,
+    0.6666666865348816,
+    0.375,
+    0.625,
+    0.375,
+    0.625
+  ],
+  "selected_basin_ids": [
+    80,
+    30,
+    66,
+    30,
+    66,
+    30,
+    66,
+    30,
+    66,
+    30
+  ],
+  "selected_basin_ids_eff": [
+    80,
+    30,
+    66,
+    30,
+    66,
+    30,
+    66,
+    30,
+    66,
+    30
+  ],
+  "selected_paths": [
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6926/6926_lurcher_10x_lurcher_3_2_Image_03.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6350/6350_lurcher_10x_lurcher_1_3_Image_03.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6350/6350_lurcher_10x_lurcher_1_2_Image_01.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6323/6323_lurcher_10x_lurcher_1_1_Image_01.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6483/6483_wild_10x_wild_1_2_Image_19.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6350/6350_lurcher_10x_lurcher_2_2_Image_09.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6349/6349_wild_10x_wild_1_3_Image_11.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6324/6324_wild_3_2_Image_03.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6353/6353_wild_10x_wild_2_3_Image_08.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/5973/5973_wild_10x_wild_1_2_Image_01.jpg"
+  ],
+  "selected_pairwise_cosine_summary": {
+    "selected_cos_sim_max": 0.939504861831665,
+    "selected_cos_sim_median": 0.8848944902420044,
+    "selected_cos_sim_p90": 0.920356023311615
+  }
+}

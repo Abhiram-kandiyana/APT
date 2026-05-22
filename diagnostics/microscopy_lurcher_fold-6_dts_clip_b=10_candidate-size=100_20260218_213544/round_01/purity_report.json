@@ -1,0 +1,37 @@
+{
+  "round_index": 1,
+  "min_labeled_per_basin": 3,
+  "num_purity_basins": 3,
+  "mean_purity": 0.8888888888888888,
+  "frac_purity_ge_0.8": 0.6666666666666666,
+  "lowest_purity_basins": [
+    {
+      "basin_id": 1050,
+      "labeled_count": 3,
+      "purity": 0.6666666666666666,
+      "entropy": 0.6365141682948128,
+      "label_counts": {
+        "lurcher": 1,
+        "wild": 2
+      }
+    },
+    {
+      "basin_id": 291,
+      "labeled_count": 4,
+      "purity": 1.0,
+      "entropy": -0.0,
+      "label_counts": {
+        "wild": 4
+      }
+    },
+    {
+      "basin_id": 1890,
+      "labeled_count": 4,
+      "purity": 1.0,
+      "entropy": -0.0,
+      "label_counts": {
+        "lurcher": 4
+      }
+    }
+  ]
+}

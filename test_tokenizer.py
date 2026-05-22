@@ -1,4 +1,4 @@
-from code_mdl import tokenizer
+from main import tokenizer
 import numpy as np
 
 def test_tokenizer():

@@ -1,0 +1,67 @@
+{
+  "selected_indices": [
+    37,
+    31,
+    55,
+    83,
+    46,
+    44,
+    45,
+    36,
+    99,
+    33
+  ],
+  "selected_boundary_scores": [
+    0.75,
+    0.6666666865348816,
+    0.5,
+    0.6000000238418579,
+    0.6000000238418579,
+    0.5,
+    0.5714285969734192,
+    0.4000000059604645,
+    0.5,
+    0.375
+  ],
+  "selected_basin_ids": [
+    92,
+    10,
+    92,
+    10,
+    10,
+    92,
+    10,
+    92,
+    10,
+    92
+  ],
+  "selected_basin_ids_eff": [
+    92,
+    10,
+    92,
+    10,
+    10,
+    92,
+    10,
+    92,
+    10,
+    92
+  ],
+  "selected_paths": [
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6323/6323_lurcher_10x_lurcher_2_1_Image_02.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6130/6130_wild_1_2_Image_13.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6483/6483_wild_10x_wild_1_2_Image_20.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6483/6483_wild_10x_wild_2_1_Image_02.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6133/6133_wild_4_1_Image_06.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6928/6928_wild_1_4_Image_20.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6483/6483_wild_10x_wild_2_2_Image_06.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/5955/5955_lurcher_3_2_Image_06.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6323/6323_lurcher_10x_lurcher_2_2_Image_03.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6928/6928_wild_4_4_Image_04.jpg"
+  ],
+  "selected_pairwise_cosine_summary": {
+    "selected_cos_sim_max": 0.9725192785263062,
+    "selected_cos_sim_median": 0.9371100664138794,
+    "selected_cos_sim_p90": 0.9650068044662475
+  }
+}

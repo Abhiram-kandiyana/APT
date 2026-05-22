@@ -1,0 +1,67 @@
+{
+  "selected_indices": [
+    865,
+    1059,
+    777,
+    1839,
+    795,
+    1924,
+    1774,
+    1767,
+    2158,
+    1865
+  ],
+  "selected_boundary_scores": [
+    1.0,
+    0.9333333373069763,
+    0.9333333373069763,
+    0.9333333373069763,
+    0.9333333373069763,
+    0.9333333373069763,
+    0.9333333373069763,
+    0.9333333373069763,
+    0.9333333373069763,
+    0.9333333373069763
+  ],
+  "selected_basin_ids": [
+    865,
+    1530,
+    223,
+    1121,
+    248,
+    2096,
+    1174,
+    1071,
+    2212,
+    1787
+  ],
+  "selected_basin_ids_eff": [
+    1787,
+    1530,
+    223,
+    1121,
+    248,
+    2096,
+    1174,
+    1071,
+    2212,
+    1787
+  ],
+  "selected_paths": [
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6926/6926_lurcher_10x_lurcher_3_1_Image_03.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6132/6132_wild_10x_wild_1_1_Image_07.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6349/6349_wild_10x_wild_4_3_Image_14.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6133/6133_wild_2_3_Image_08.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/5973/5973_wild_10x_wild_2_1_Image_05.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6349/6349_wild_10x_wild_2_2_Image_07.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6130/6130_wild_2_2_Image_04.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/5973/5973_wild_10x_wild_1_3_Image_10.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/5973/5973_wild_10x_wild_2_3_Image_01.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6483/6483_wild_10x_wild_3_2_Image_05.jpg"
+  ],
+  "selected_pairwise_cosine_summary": {
+    "selected_cos_sim_max": 0.9271445870399475,
+    "selected_cos_sim_median": 0.8497134447097778,
+    "selected_cos_sim_p90": 0.9006333708763122
+  }
+}

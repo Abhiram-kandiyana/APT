@@ -1,0 +1,23 @@
+{
+  "basin_size_by_id": {
+    "2": 100
+  },
+  "basin_size_by_id_eff": {
+    "2": 100
+  },
+  "top10_basins": [
+    {
+      "basin_id": 2,
+      "size": 100
+    }
+  ],
+  "top10_basins_eff": [
+    {
+      "basin_id": 2,
+      "size": 100
+    }
+  ],
+  "basin_size_entropy": -0.0,
+  "C": 1,
+  "C_eff": 1
+}

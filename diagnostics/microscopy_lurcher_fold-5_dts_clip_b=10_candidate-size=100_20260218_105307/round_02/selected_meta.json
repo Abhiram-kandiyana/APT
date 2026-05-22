@@ -1,0 +1,67 @@
+{
+  "selected_indices": [
+    87,
+    50,
+    29,
+    99,
+    5,
+    48,
+    9,
+    13,
+    75,
+    33
+  ],
+  "selected_boundary_scores": [
+    1.0,
+    0.800000011920929,
+    0.625,
+    0.75,
+    0.5,
+    0.625,
+    0.5,
+    0.5,
+    0.5,
+    0.5
+  ],
+  "selected_basin_ids": [
+    87,
+    26,
+    63,
+    26,
+    63,
+    26,
+    63,
+    26,
+    63,
+    26
+  ],
+  "selected_basin_ids_eff": [
+    63,
+    26,
+    63,
+    26,
+    63,
+    26,
+    63,
+    26,
+    63,
+    26
+  ],
+  "selected_paths": [
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6349/6349_wild_10x_wild_4_2_Image_11.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6926/6926_lurcher_10x_lurcher_7_3_Image_01.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6927/6927_lurcher_10x_lurcher_2_2_Image_03.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6133/6133_wild_2_2_Image_01.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6927/6927_lurcher_10x_lurcher_3_4_Image_02.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6509/6509_lurcher_10x_lurcher_2_1_Image_02.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/5917/5917_lurcher_10x_lurcher_3_2_Image_03.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6926/6926_lurcher_10x_lurcher_1_4_Image_02.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6927/6927_lurcher_10x_lurcher_1_1_Image_10.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6927/6927_lurcher_10x_lurcher_1_3_Image_06.jpg"
+  ],
+  "selected_pairwise_cosine_summary": {
+    "selected_cos_sim_max": 0.9785281419754028,
+    "selected_cos_sim_median": 0.9424101114273071,
+    "selected_cos_sim_p90": 0.9671318292617798
+  }
+}

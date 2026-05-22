@@ -1,0 +1,43 @@
+{
+  "basin_size_by_id": {
+    "3": 74,
+    "61": 1,
+    "70": 24,
+    "95": 1
+  },
+  "basin_size_by_id_eff": {
+    "3": 75,
+    "70": 25
+  },
+  "top10_basins": [
+    {
+      "basin_id": 3,
+      "size": 74
+    },
+    {
+      "basin_id": 70,
+      "size": 24
+    },
+    {
+      "basin_id": 61,
+      "size": 1
+    },
+    {
+      "basin_id": 95,
+      "size": 1
+    }
+  ],
+  "top10_basins_eff": [
+    {
+      "basin_id": 3,
+      "size": 75
+    },
+    {
+      "basin_id": 70,
+      "size": 25
+    }
+  ],
+  "basin_size_entropy": 0.6574290977334989,
+  "C": 4,
+  "C_eff": 2
+}

@@ -1,0 +1,712 @@
+[
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_1_1_Image_01.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_1_1_Image_03.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_1_1_Image_04.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_1_1_Image_05.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_1_1_Image_06.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_1_1_Image_07.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_1_1_Image_08.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_1_1_Image_09.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_1_1_Image_10.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_1_1_Image_11.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_1_2_Image_01.jpg",
+        "label": 1,
+        "rationale": "The image shows disrupted cellular organization with less dense and irregular distribution. The layering pattern is abnormal, displaying a lack of clear layering and reduced thickness. There is a severe depletion of Purkinje cells. The granule cell layer appears thinned with reduced density. Overall, the structure has visible gaps and discontinuities. The staining pattern demonstrates variable intensity with distinct boundaries."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_1_2_Image_02.jpg",
+        "label": 1,
+        "rationale": "The image presents a disrupted cellular organization with inconsistent cell density. The layering pattern is irregular with significant thinning. The Purkinje cell layer is largely absent. The granule cell layer shows reduced thickness and density. The overall structure is discontinuous with visible gaps. Staining intensity is variable, highlighting layer boundaries."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_1_2_Image_03.jpg",
+        "label": 0,
+        "rationale": "This image displays dense cellular organization with uniform distribution typical of a wild type. The layering pattern is well-defined and continuous. The Purkinje cell layer is intact, forming a clear boundary between molecular and granular layers. The granule cell layer is thick and densely packed. The overall structure is compact with minimal spaces. The staining is homogeneous across layers."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_1_2_Image_04.jpg",
+        "label": 0,
+        "rationale": "The image reveals dense cellular organization and clear, continuous layering. The Purkinje cell layer appears intact, with good separation between molecular and granular layers. The granule cell layer is thick and has high cell density. There is a compact, continuous structure with minimal gaps. Staining across the cortex is uniform."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_1_2_Image_05.jpg",
+        "label": 1,
+        "rationale": "The image indicates disrupted cellular organization with irregular distribution and reduced density. The layering pattern is lacking clear continuity and is visibly thinned. The Purkinje cell layer is notably absent. The granule cell layer is thinner with fewer cells. Overall appearance is disrupted with visible gaps. Staining is variable, with distinct boundaries."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_1_2_Image_09.jpg",
+        "label": 1,
+        "rationale": "The image shows a disrupted cellular organization with irregular distribution. The layering pattern appears abnormal with reduced layer thickness. The Purkinje cell layer is severely depleted. The granule cell layer is thinned with visible gaps in the structure. The staining pattern is variable with distinct boundaries."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_1_2_Image_10.jpg",
+        "label": 1,
+        "rationale": "Cellular organization is less dense with irregular distribution. Abnormal layering pattern with distinct separation between layers. Almost complete absence of the Purkinje cell layer. The granule cell layer is reduced in thickness and density. Visible discontinuities in overall structure and variable staining intensity."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_1_2_Image_12.jpg",
+        "label": 1,
+        "rationale": "Tissue organization appears disrupted and less dense. The layering pattern is abnormal with reduced thickness. There is a notable depletion of Purkinje cells. The granule cell layer shows reduced density and thickness. Overall, there are visible gaps in tissue architecture and variable staining."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_1_2_Image_17.jpg",
+        "label": 0,
+        "rationale": "Cellular organization is compact and dense with uniform distribution. The layering pattern is well-defined with consistent thickness. The Purkinje cell layer is intact. The granule cell layer is thick and densely packed. Overall structure is compact and continuous with homogeneous staining intensity."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_1_2_Image_18.jpg",
+        "label": 0,
+        "rationale": "Tissue exhibits a dense and compact cellular arrangement with uniform distribution. Layers are well-defined and continuous in thickness. The presence of a monolayer of Purkinje cells is intact. Granule cell layer shows high density. The structure is continuous and compact with homogeneous staining."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_1_Image_01.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_1_Image_09.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_1_Image_10.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_1_Image_11.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_1_Image_12.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_1_Image_13.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_1_Image_14.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_1_Image_17.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_1_Image_19.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_1_Image_20.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_2_Image_02.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_2_Image_03.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_2_Image_05.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_2_Image_07.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_2_Image_09.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_2_Image_11.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_2_Image_12.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_2_Image_15.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_2_Image_18.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_2_Image_19.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_3_Image_01.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_3_Image_05.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_3_Image_06.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_3_Image_07.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_3_Image_08.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_3_Image_09.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_3_Image_10.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_3_Image_11.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_3_Image_14.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_2_3_Image_16.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_1_Image_01.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_1_Image_05.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_1_Image_06.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_1_Image_07.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_1_Image_09.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_1_Image_11.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_1_Image_12.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_1_Image_13.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_1_Image_14.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_1_Image_15.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_2_Image_01.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_2_Image_05.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_2_Image_07.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_2_Image_09.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_2_Image_14.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_2_Image_17.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_2_Image_18.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_2_Image_20.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_2_Image_22.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_2_Image_23.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_3_Image_01.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_3_Image_05.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_3_Image_08.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_3_Image_09.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_3_Image_15.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_3_Image_17.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_3_Image_18.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_3_Image_20.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_3_Image_21.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_3_3_Image_22.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_4_1_Image_02.jpg",
+        "label": 0,
+        "rationale": "Cellular organization is dense and compact with uniform cell distribution. The layering pattern is well-defined and continuous with consistent thickness. Purkinje cell layer appears intact. The granule cell layer is thick and densely packed. Overall structure is compact with minimal spaces between cells. Staining pattern is homogeneous."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_4_1_Image_07.jpg",
+        "label": 1,
+        "rationale": "Cellular organization is disrupted with less dense arrangement and irregular cell distribution. Layering pattern shows distinct but abnormal layering with reduced thickness. The Purkinje cell layer is depleted or absent. The granule cell layer is thinned with reduced density. Overall structure shows visible gaps and discontinuities. Staining pattern is variable with distinct boundaries between layers."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_4_1_Image_09.jpg",
+        "label": 1,
+        "rationale": "Cellular organization is disrupted with less dense cell distribution. Layering pattern appears abnormal with reduced thickness. Purkinje cell layer shows severe depletion. The granule cell layer is thinned with lowered density. Overall structure shows visible gaps. Staining pattern exhibits variable intensity."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_4_1_Image_11.jpg",
+        "label": 0,
+        "rationale": "Cellular organization is dense and compact. Layering pattern is well-defined with consistent thickness. Purkinje cell layer is visible and intact. The granule cell layer is thick and densely packed. Overall structure is continuous with minimal spaces. Staining pattern is uniform."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_4_1_Image_15.jpg",
+        "label": 1,
+        "rationale": "Cellular organization shows disrupted arrangement with irregular cell distribution. Layering pattern displays reduced thickness and abnormal separations. Purkinje cell layer is depleted. The granule cell layer appears thinned and less dense. Overall structure has visible gaps and discontinuities. Staining pattern shows variation in intensity."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_4_1_Image_18.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_4_1_Image_24.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_4_1_Image_26.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_4_1_Image_29.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_4_1_Image_34.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_4_2_Image_03.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_4_2_Image_05.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_4_2_Image_08.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_4_2_Image_10.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_4_2_Image_13.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_4_2_Image_14.jpg",
+        "label": 1,
+        "rationale": "The image shows disrupted cellular organization with irregular cell distribution. The layering pattern is distinct yet abnormal, indicating reduced thickness. The Purkinje cell layer is severely depleted. The granule cell layer appears thinned with reduced cell density. There are visible gaps and discontinuities in the overall structure. The staining pattern shows variable intensity with distinct boundaries between layers."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_4_2_Image_15.jpg",
+        "label": 1,
+        "rationale": "Similar to the first image, this shows disrupted cellular organization and irregular layering. The Purkinje cell layer is markedly reduced or absent. The granule cell layer is thinner with less density. The overall structure has discontinuities, and the staining pattern varies in intensity with distinct layer boundaries."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_4_2_Image_16.jpg",
+        "label": 0,
+        "rationale": "The image has dense, compact cellular organization with uniform distribution. The layering pattern is well-defined and continuous. A clear monolayer of Purkinje cells is visible between the molecular and granular layers. The granule cell layer is thick and densely packed. The overall structure is compact and continuous, and the staining pattern is homogeneous across the cerebellar cortex."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_4_2_Image_18.jpg",
+        "label": 0,
+        "rationale": "The image presents a dense and compact cellular organization. The layering pattern is well-defined, and the Purkinje cell layer remains intact. The granule cell layer is thick and densely packed. The overall structure is continuous with minimal spaces, and staining is homogeneous."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6130/6130_wild_4_2_Image_19.jpg",
+        "label": 0,
+        "rationale": "The image shows dense cellular organization with defined layering. The Purkinje cell layer appears intact. The granule cell layer is densely packed and thick. The overall structure is compact and continuous, with a consistent staining pattern throughout."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_1_1_Image_01.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_1_1_Image_02.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_1_1_Image_03.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_1_2_Image_01.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_1_2_Image_02.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_1_2_Image_03.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_1_2_Image_04.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_1_3_Image_01.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_1_3_Image_02.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_1_3_Image_03.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_1_3_Image_04.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_1_3_Image_05.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_1_4_Image_01.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_1_4_Image_02.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_1_4_Image_03.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_1_4_Image_04.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_1_4_Image_05.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_1_4_Image_06.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_2_1_Image_01.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_2_1_Image_02.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_2_1_Image_03.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_2_1_Image_04.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_2_1_Image_05.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_2_2_Image_01.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_2_2_Image_02.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_2_2_Image_03.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_2_3_Image_01.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_2_3_Image_02.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_2_3_Image_03.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_2_3_Image_04.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_2_3_Image_05.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_2_3_Image_06.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_2_4_Image_01.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_2_4_Image_02.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_2_4_Image_03.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_2_4_Image_04.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_3_1_Image_01.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_3_1_Image_02.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_3_1_Image_03.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_3_1_Image_04.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_3_1_Image_05.jpg",
+        "label": 1,
+        "rationale": "The image shows a disrupted cellular organization with irregular cell distribution. The layering pattern is abnormal with reduced thickness and visible discontinuities. There is a severe depletion of the Purkinje cell layer, and the granule cell layer appears thinned with reduced density. The overall structure includes visible gaps and discontinuities, and the staining pattern is heterogeneous with distinct layer boundaries."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6481/6481_lurcher_10x_lurcher_3_1_Image_06.jpg",
+        "label": 1,
+        "rationale": "The image displays disrupted cellular organization with less dense arrangement. The layering pattern is irregular with noticeable separation and reduced thickness of layers. Purkinje cells are severely depleted or absent, and the internal granular layer appears thinned with low cell density. The overall structure includes visible gaps, and the staining pattern shows variable intensity with clearer boundaries between layers."
+    }
+]

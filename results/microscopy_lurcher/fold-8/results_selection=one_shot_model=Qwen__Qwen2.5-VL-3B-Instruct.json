@@ -1,0 +1,55 @@
+{
+  "dataset": "microscopy_lurcher",
+  "fold": 8,
+  "selection_method": "one_shot",
+  "created_at": "2026-05-02 21:39:54",
+  "updated_at": "2026-05-02 21:39:54",
+  "test": {
+    "round": 0,
+    "test_subset_size": 142,
+    "sampled_per_class": {
+      "wild": 100,
+      "lurcher": 42
+    },
+    "predicted_per_class": {
+      "wild": 133,
+      "lurcher": 8,
+      "unknown": 1
+    },
+    "class_totals": {
+      "wild": 100,
+      "lurcher": 42
+    },
+    "class_correct": {
+      "wild": 95,
+      "lurcher": 4
+    },
+    "case_ids_by_class": {
+      "wild": [
+        "6130"
+      ],
+      "lurcher": [
+        "6481"
+      ]
+    },
+    "case_ids_correct_by_class": {
+      "wild": [
+        "6130"
+      ],
+      "lurcher": [
+        "6481"
+      ]
+    },
+    "class_accuracy_pct": {
+      "wild": 95.0,
+      "lurcher": 9.523809523809524
+    },
+    "avg_class_accuracy_pct": 52.26190476190476,
+    "test_predictions_path": "test_results/microscopy_lurcher/selection_method=one_shot_model=Qwen__Qwen2.5-VL-3B-Instruct/fold-8.json",
+    "invalid_output_stats": {
+      "invalid_label": 3,
+      "total_invalid_output_events": 4,
+      "exhausted_invalid_output_retries": 1
+    }
+  }
+}

@@ -6,7 +6,7 @@ import numpy as np
 # Set API Key from launch.json
 os.environ["OPENAI_API_KEY"] = "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"
 
-from code_mdl import APTMDL, mdl_loss
+from main import APT, mdl_loss
 from utils import load_data
 
 def recover():
@@ -30,7 +30,7 @@ def recover():
     with open(round2_prompt_set_path, 'r') as f:
         prompt_set_r2_dicts = json.load(f)
     
-    # Convert dicts back to tuples for APTMDL
+    # Convert dicts back to tuples for APT
     prompt_set_r2 = []
     for item in prompt_set_r2_dicts:
         caption = f"{item['rationale']} C: {item['class']}"
@@ -69,10 +69,10 @@ def recover():
     val_data = load_data(val_json_path, known_labels=known_labels)
     print(f"Loaded {len(val_data)} validation examples.")
 
-    # Initialize APTMDL
+    # Initialize APT
     # Parameters from user request/logs:
     # K=5, rounds=5, pool=100, batch=10, temp=1.0
-    aptmdl = APTMDL(
+    apt = APT(
         system_prompt_1_path=system_prompt_1_path,
         system_prompt_2_path="system_prompt_2.md", # This is actually unused in __init__ as it uses template string
         alpha=0.01,
@@ -89,7 +89,7 @@ def recover():
         prompt_set_path="round-2-prompt_set.json"
     )
     
-    aptmdl.prompt_set = prompt_set_r2
+    apt.prompt_set = prompt_set_r2
     
     # Run Evaluation for Round 2
     # We need to pass gen_kwargs for logging filename construction
@@ -101,7 +101,7 @@ def recover():
     }
     
     print("Running evaluation for Round 2...")
-    loss = aptmdl.evaluate(val_data, round_num=2, **gen_kwargs)
+    loss = apt.evaluate(val_data, round_num=2, **gen_kwargs)
     print(f"Round 2 MDL Loss: {loss}")
 
     # Save Checkpoint for Round 3
@@ -114,10 +114,10 @@ def recover():
     # So if Round 2 finishes, we should save "round": 2?
     # But user said "round-3 values". Maybe they mean the state *ready* for round 3.
     # If "round": 1 means ready for round 2, then "round": 2 means ready for round 3.
-    # Let's check code_mdl.py resume logic.
+    # Let's check main.py resume logic.
     # I'll assume "round": 2 means Round 2 is done.
     # Wait, if I save "round": 2, and resume, does it start Round 3?
-    # I'll check code_mdl.py later if needed, but standard is usually last completed round.
+    # I'll check main.py later if needed, but standard is usually last completed round.
     # Actually, let's look at the user request again: "I also want the round-3 values to logged on to the @[checkpoint.json]"
     # Maybe they mean "round": 3?
     # Let's save as "round": 2 for now, as that reflects what we just finished. 

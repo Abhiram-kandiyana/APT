@@ -1,0 +1,11 @@
+round: 7
+min_labeled_per_basin: 5
+num_purity_basins: 6
+mean_purity: 0.9466
+frac_purity_ge_0.8: 1.0000
+lowest_purity_basins:
+  basin=843 labeled=7 purity=0.8571 entropy=0.4101 counts={'lurcher': 6, 'wild': 1}
+  basin=1703 labeled=16 purity=0.8750 entropy=0.3768 counts={'lurcher': 14, 'wild': 2}
+  basin=409 labeled=19 purity=0.9474 entropy=0.2062 counts={'wild': 18, 'lurcher': 1}
+  basin=1992 labeled=9 purity=1.0000 entropy=-0.0000 counts={'wild': 9}
+  basin=87 labeled=9 purity=1.0000 entropy=-0.0000 counts={'wild': 9}

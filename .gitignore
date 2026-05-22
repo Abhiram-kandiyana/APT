@@ -11,6 +11,11 @@ __pycache__/
 # Runtime/output artifacts
 logs/
 diagnostics/
+models/
+prompt_sets/
+results/
+test_results/
+val_results/
 *_old/
 *.log
 *.tmp
@@ -18,6 +23,10 @@ diagnostics/
 # Checkpoints and local state
 checkpoint*.json
 checkpoint*.jsonl
+final_prompt_set_*.json
+round-2-prompt_set*.json
+vlm_log*.json
+test_log.json
 *.ckpt
 *.pt
 *.pth

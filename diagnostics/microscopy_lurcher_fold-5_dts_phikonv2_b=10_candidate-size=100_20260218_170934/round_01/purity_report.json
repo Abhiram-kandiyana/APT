@@ -1,0 +1,27 @@
+{
+  "round_index": 1,
+  "min_labeled_per_basin": 3,
+  "num_purity_basins": 2,
+  "mean_purity": 1.0,
+  "frac_purity_ge_0.8": 1.0,
+  "lowest_purity_basins": [
+    {
+      "basin_id": 1445,
+      "labeled_count": 8,
+      "purity": 1.0,
+      "entropy": -0.0,
+      "label_counts": {
+        "lurcher": 8
+      }
+    },
+    {
+      "basin_id": 67,
+      "labeled_count": 4,
+      "purity": 1.0,
+      "entropy": -0.0,
+      "label_counts": {
+        "lurcher": 4
+      }
+    }
+  ]
+}

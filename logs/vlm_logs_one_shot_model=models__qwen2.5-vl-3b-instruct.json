@@ -1,0 +1,12 @@
+[
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/wild/6353/6353_wild_10x_wild_1_1_Image_01.jpg",
+        "label": -1,
+        "rationale": "Unable to get a classification from the model even after multiple retries. This prediction is marked invalid and should be counted as incorrect in accuracy metrics."
+    },
+    {
+        "image_path": "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x_testing/lurcher/6350/6350_lurcher_10x_lurcher_1_1_Image_01.jpg",
+        "label": 0,
+        "rationale": "The cellular organization appears dense and compact, with a uniform distribution of cells. The layering pattern is well-defined and continuous, with consistent thickness. The Purkinje cell layer is intact and intact monolayer of Purkinje cells between molecular and granular layers. The granule cell layer is thick and densely packed, with high cell density. The overall structure is continuous and the tissue is compact with minimal spaces between cells. The staining pattern is homogeneous, with no visible gaps or discontinuities."
+    }
+]

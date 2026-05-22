@@ -1,4 +1,4 @@
-from code_mdl import get_stochastic_params
+from main import get_stochastic_params
 
 def test_stochastic_params():
     K = 10

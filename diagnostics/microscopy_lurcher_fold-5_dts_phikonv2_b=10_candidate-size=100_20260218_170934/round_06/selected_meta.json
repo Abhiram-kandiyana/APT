@@ -1,0 +1,67 @@
+{
+  "selected_indices": [
+    50,
+    23,
+    6,
+    85,
+    40,
+    99,
+    26,
+    61,
+    15,
+    43
+  ],
+  "selected_boundary_scores": [
+    0.75,
+    0.625,
+    0.25,
+    0.75,
+    0.5,
+    0.25,
+    0.7142857313156128,
+    0.5,
+    0.25,
+    0.6666666865348816
+  ],
+  "selected_basin_ids": [
+    30,
+    13,
+    96,
+    30,
+    13,
+    96,
+    30,
+    13,
+    96,
+    30
+  ],
+  "selected_basin_ids_eff": [
+    30,
+    13,
+    96,
+    30,
+    13,
+    96,
+    30,
+    13,
+    96,
+    30
+  ],
+  "selected_paths": [
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6481/6481_lurcher_10x_lurcher_1_1_Image_03.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6483/6483_wild_10x_wild_4_1_Image_01.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/5917/5917_lurcher_10x_lurcher_3_1_Image_03.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/5917/5917_lurcher_10x_lurcher_1_2_Image_01.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/5973/5973_wild_10x_wild_4_2_Image_01.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/5954/5954_lurcher_1_4_Image_02.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6483/6483_wild_10x_wild_2_2_Image_02.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6132/6132_wild_10x_wild_3_1_Image_17.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6927/6927_lurcher_10x_lurcher_4_4_Image_03.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6483/6483_wild_10x_wild_2_2_Image_06.jpg"
+  ],
+  "selected_pairwise_cosine_summary": {
+    "selected_cos_sim_max": 0.9246314167976379,
+    "selected_cos_sim_median": 0.8462307453155518,
+    "selected_cos_sim_p90": 0.9007033586502076
+  }
+}

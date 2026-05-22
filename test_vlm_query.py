@@ -4,22 +4,18 @@ import sys
 import os
 
 # Mock dependencies before importing anything that uses them
-sys.modules['numpy'] = MagicMock()
 sys.modules['openai'] = MagicMock()
 sys.modules['dotenv'] = MagicMock()
 sys.modules['sentence_transformers'] = MagicMock()
 
-# Now import numpy (it will use the mock)
-import numpy as np
-
-# Add current directory to path to import code_mdl
+# Add current directory to path to import main
 sys.path.append(os.getcwd())
 
-import code_mdl
+import main
 
 class TestVLMQuery(unittest.TestCase):
-    @patch('code_mdl.client')
-    @patch('code_mdl.encode_image')
+    @patch('main.client')
+    @patch('main.encode_image')
     def test_vlm_query_success(self, mock_encode, mock_client):
         # Setup mocks
         mock_encode.return_value = "base64string"
@@ -44,14 +40,14 @@ class TestVLMQuery(unittest.TestCase):
 
         with patch('builtins.open', side_effect=side_effect):
             # Call function
-            label, explanation = code_mdl.vlm_query(x, sp1_path, sp2_path, prompt_set)
+            label, explanation = main.vlm_query(x, sp1_path, sp2_path, prompt_set)
         
         # Assertions
         self.assertEqual(label, 1) # T -> 1 (fallback)
         self.assertEqual(explanation, "This is a test explanation.")
 
-    @patch('code_mdl.client')
-    @patch('code_mdl.encode_image')
+    @patch('main.client')
+    @patch('main.encode_image')
     def test_vlm_query_dynamic_mapping(self, mock_encode, mock_client):
         mock_encode.return_value = "base64string"
         
@@ -62,31 +58,31 @@ class TestVLMQuery(unittest.TestCase):
         # Mock file reading
         with patch('builtins.open', mock_open(read_data="content")):
              # Provide label_map: W->0, L->1
-             label, explanation = code_mdl.vlm_query("x", "p1", "p2", [], label_map=['W', 'L'])
+             label, explanation = main.vlm_query("x", "p1", "p2", [], label_map=['W', 'L'])
              
         self.assertEqual(label, 1) # L -> 1
         self.assertEqual(explanation, "Explanation")
 
     def test_text_encoder(self):
         # Mock the st_model.encode method
-        code_mdl.st_model = MagicMock()
+        main.st_model = MagicMock()
         mock_embeddings = MagicMock()
         mock_embeddings.__len__.return_value = 1
-        code_mdl.st_model.encode.return_value = mock_embeddings
+        main.st_model.encode.return_value = mock_embeddings
         
         captions = ["test caption"]
-        embeddings = code_mdl.text_encoder(captions)
+        embeddings = main.text_encoder(captions)
         
-        code_mdl.st_model.encode.assert_called_with(captions)
+        main.st_model.encode.assert_called_with(captions)
         self.assertTrue(len(embeddings) > 0)
 
     def test_tokenizer(self):
         text = "Hello, world!"
         mock_encoding = MagicMock()
         mock_encoding.encode.return_value = [1, 2, 3]
-        code_mdl.enc = None
-        with patch('code_mdl.tiktoken.get_encoding', return_value=mock_encoding):
-            tokens = code_mdl.tokenizer(text)
+        main.enc = None
+        with patch('main.tiktoken.get_encoding', return_value=mock_encoding):
+            tokens = main.tokenizer(text)
         self.assertTrue(all(isinstance(token, int) for token in tokens))
         self.assertTrue(len(tokens) >= 2)
 

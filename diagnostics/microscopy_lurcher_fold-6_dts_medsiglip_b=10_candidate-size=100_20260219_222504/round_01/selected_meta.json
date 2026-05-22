@@ -1,0 +1,67 @@
+{
+  "selected_indices": [
+    40,
+    6,
+    1,
+    60,
+    17,
+    21,
+    23,
+    53,
+    4,
+    37
+  ],
+  "selected_boundary_scores": [
+    0.6666666865348816,
+    0.625,
+    0.25,
+    0.625,
+    0.625,
+    0.20000000298023224,
+    0.5,
+    0.4285714328289032,
+    0.125,
+    0.5
+  ],
+  "selected_basin_ids": [
+    41,
+    44,
+    30,
+    41,
+    44,
+    30,
+    41,
+    44,
+    30,
+    41
+  ],
+  "selected_basin_ids_eff": [
+    41,
+    44,
+    30,
+    41,
+    44,
+    30,
+    41,
+    44,
+    30,
+    41
+  ],
+  "selected_paths": [
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6350/6350_lurcher_10x_lurcher_1_2_Image_02.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6349/6349_wild_10x_wild_4_3_Image_09.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6323/6323_lurcher_10x_lurcher_2_1_Image_02.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6483/6483_wild_10x_wild_1_1_Image_05.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6353/6353_wild_10x_wild_2_3_Image_08.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6926/6926_lurcher_10x_lurcher_2_3_Image_01.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6132/6132_wild_10x_wild_1_2_Image_04.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/wild/6132/6132_wild_10x_wild_2_1_Image_02.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6323/6323_lurcher_10x_lurcher_2_3_Image_02.jpg",
+    "/Users/abhiramkandiyana/Microscopy/Microscopy/Dataset/lurcher_mice_10x/lurcher/6350/6350_lurcher_10x_lurcher_2_2_Image_09.jpg"
+  ],
+  "selected_pairwise_cosine_summary": {
+    "selected_cos_sim_max": 0.9475252628326416,
+    "selected_cos_sim_median": 0.8803482055664062,
+    "selected_cos_sim_p90": 0.9150243282318116
+  }
+}
