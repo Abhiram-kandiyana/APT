@@ -1,20 +1,19 @@
 # Active Prompt Tuning
 
-[![Paper](https://img.shields.io/badge/Paper-CVF-blue)](https://openaccess.thecvf.com/content/CVPR2026W/PHAROS-AIF-MIH/papers/Kandiyana_A_Human-in-the-Loop_Framework_for_Efficient_Prompt_Selection_in_Microscopy_Vision-Language_CVPRW_2026_paper.pdf)
+[![Paper](https://img.shields.io/badge/Paper-CVPR-blue)](https://openaccess.thecvf.com/content/CVPR2026W/PHAROS-AIF-MIH/papers/Kandiyana_A_Human-in-the-Loop_Framework_for_Efficient_Prompt_Selection_in_Microscopy_Vision-Language_CVPRW_2026_paper.pdf)
 [![Project Page](https://img.shields.io/badge/Project-Page-green)](https://abhiram-kandiyana.github.io/APT/)
 [![Dataset](https://img.shields.io/badge/Dataset-Hugging%20Face-yellow)](https://huggingface.co/datasets/USF-CS-Microscopy-Image-Analysis/Lurcher_10x)
-[![Code](https://img.shields.io/badge/Code-GitHub-black)](https://github.com/abhiram-kandiyana/APT)
 
-This is the code repository for [**A Human-in-the-Loop Framework for Efficient Prompt Selection in Microscopy Vision-Language Models**](https://openaccess.thecvf.com/content/CVPR2026W/PHAROS-AIF-MIH/papers/Kandiyana_A_Human-in-the-Loop_Framework_for_Efficient_Prompt_Selection_in_Microscopy_Vision-Language_CVPRW_2026_paper.pdf), published in the CVPR Workshops 2026 proceedings. The accompanying project page is available at [abhiram-kandiyana.github.io/APT](https://abhiram-kandiyana.github.io/APT/), and the Lurcher microscopy data, fixed folds, seed prompts, metadata, and prompt bank are hosted on [Hugging Face](https://huggingface.co/datasets/USF-CS-Microscopy-Image-Analysis/Lurcher_10x).
+This is the code repository for [**A Human-in-the-Loop Framework for Efficient Prompt Selection in Microscopy Vision-Language Models**](https://openaccess.thecvf.com/content/CVPR2026W/PHAROS-AIF-MIH/papers/Kandiyana_A_Human-in-the-Loop_Framework_for_Efficient_Prompt_Selection_in_Microscopy_Vision-Language_CVPRW_2026_paper.pdf), published in the CVPR Workshops 2026 proceedings.
 
 Active Prompt Tuning (APT) is an active-learning workflow for improving visual language model prompts on microscopy classification tasks. APT starts from a small set of expert seed examples, uses a VLM to classify validation and candidate images, selects the next useful examples to add to the prompt, sends those examples through an oracle correction step, and repeats until validation performance reaches a target or the run reaches the round limit.
 
 The current implementation is centered on `main.py`. It supports several selection strategies:
 
-- `dts`: density-threshold sampling over image embeddings.
-- `mdl`: minimum-description-length scoring.
-- `entropy`: uncertainty-based active selection.
-- `random`: random active-set selection.
+- `random`: APT random active-set selection.
+- `u`: APT-U uncertainty-based active selection.
+- `ca`: APT-CA caption-aware active selection.
+- `dtb`: APT-DTB density-tree boundary selection over image embeddings.
 - `zero_shot`: test-only baseline with no prompt examples.
 - `one_shot`: test-only baseline using a fixed corrected prompt set.
 
@@ -68,14 +67,14 @@ datasets/microscopy_lurcher/fold-<fold>/
   seed.json
 ```
 
-Run one Lurcher fold with the APT-DTS configuration:
+Run one Lurcher fold with the APT-DTB configuration:
 
 ```bash
 python main.py \
   --config config.json \
   --dataset microscopy_lurcher \
   --fold 5 \
-  --selection_method dts \
+  --selection_method dtb \
   --model gpt-4o
 ```
 
@@ -86,7 +85,7 @@ python main.py \
   --config config.json \
   --dataset microscopy_lurcher \
   --folds 5,6,8,10 \
-  --selection_method dts \
+  --selection_method dtb \
   --model gpt-4o
 ```
 
@@ -116,7 +115,7 @@ Core run arguments:
 - `--dataset`: dataset name under `datasets/`.
 - `--fold`: run one fold.
 - `--folds`: comma-separated fold list, for example `5,6,10`.
-- `--selection_method`: one of `dts`, `mdl`, `entropy`, `random`, `zero_shot`, or `one_shot`.
+- `--selection_method`: one of `dtb`, `ca`, `u`, `random`, `zero_shot`, or `one_shot`.
 - `--model`: VLM model name, defaulting to `gpt-4o` unless overridden by config.
 - `--vlm_backend`: `auto`, `openai`, `transformers`, or `mlx`.
 - `--resume`: resume from the matching checkpoint file.
@@ -153,36 +152,36 @@ Active-learning controls:
 - `--vlm_timeout_s`: timeout per VLM request.
 - `--invalid_output_max_retries`: retries for malformed VLM outputs.
 
-MDL and entropy controls:
+CA and U controls:
 
 - `--alpha`: caption-length coefficient.
 - `--beta`: caption-redundancy coefficient.
-- `--lambda_mdl`: MDL loss tradeoff.
+- `--lambda_mdl`: CA loss tradeoff.
 - `--lambda_c`: selection-score tradeoff between uncertainty and expected caption complexity.
 - `--K_uncertainty`: stochastic VLM calls for uncertainty estimation.
-- `--mdl_tol`: MDL convergence tolerance.
+- `--mdl_tol`: CA convergence tolerance.
 - `--uncertainty_cache_path`: shared JSONL cache for stochastic label counts.
 
-DTS controls:
+DTB controls:
 
-- `--dts_clip_model_alias`: embedding model alias: `biomedclip`, `clip`, `phikonv2`, or `medsiglip`.
-- `--dts_clip_model_name`: explicit embedding model id or legacy alias.
+- `--dtb_clip_model_alias`: embedding model alias: `biomedclip`, `clip`, `phikonv2`, or `medsiglip`.
+- `--dtb_clip_model_name`: explicit embedding model id or legacy alias.
 - `--clip_batch_size`: image embedding batch size.
-- `--dts_k`: neighborhood graph size.
-- `--dts_k_rho`: neighbors used for density proxy.
-- `--dts_k_t`: neighbor index used for local threshold radius.
-- `--dts_k_b`: neighbors used for boundary score.
-- `--dts_mutual_knn`: use hybrid mutual-kNN parent and boundary links.
-- `--dts_mcluster_min`: minimum cluster mass for tiny-cluster safeguards.
-- `--dts_c_tiny`: maximum selections allowed per tiny cluster.
-- `--dts_max_per_basin`: maximum selections per basin.
-- `--dts_deg_min_tiny`: tiny-basin fallback minimum mutual degree.
-- `--dts_b_min_tiny`: tiny-basin fallback minimum boundary score.
-- `--dts_tune_hparams`, `--no_dts_tune_hparams`: enable or disable DTS hyperparameter mutation.
+- `--dtb_k`: neighborhood graph size.
+- `--dtb_k_rho`: neighbors used for density proxy.
+- `--dtb_k_t`: neighbor index used for local threshold radius.
+- `--dtb_k_b`: neighbors used for boundary score.
+- `--dtb_mutual_knn`: use hybrid mutual-kNN parent and boundary links.
+- `--dtb_mcluster_min`: minimum cluster mass for tiny-cluster safeguards.
+- `--dtb_c_tiny`: maximum selections allowed per tiny cluster.
+- `--dtb_max_per_basin`: maximum selections per basin.
+- `--dtb_deg_min_tiny`: tiny-basin fallback minimum mutual degree.
+- `--dtb_b_min_tiny`: tiny-basin fallback minimum boundary score.
+- `--dtb_tune_hparams`, `--no_dtb_tune_hparams`: enable or disable DTB hyperparameter mutation.
 
 Diagnostics:
 
-- `--diagnostic_mode`: save DTS diagnostic artifacts.
+- `--diagnostic_mode`: save DTB diagnostic artifacts.
 - `--show_interactive`: show diagnostic figures interactively.
 - `--diagnostic_every`: save heavy diagnostics every N rounds.
 - `--diagnostic_outdir`: diagnostics output directory.
@@ -207,7 +206,7 @@ Baselines:
 
 ## Data Setup
 
-The public GitHub repository does not store Lurcher images, fold manifests, seed prompts, metadata, or the Lurcher prompt bank directly. The Hugging Face dataset repository is the source of truth for those artifacts:
+The public GitHub repository does not store Lurcher images, fold manifests, seed prompts, metadata, or the Lurcher prompt bank directly. The Hugging Face dataset repository is:
 
 [USF-CS-Microscopy-Image-Analysis/Lurcher_10x](https://huggingface.co/datasets/USF-CS-Microscopy-Image-Analysis/Lurcher_10x)
 
@@ -277,7 +276,7 @@ For a new dataset, create the fold JSONL files, place a matching `seed.json` in 
 python main.py \
   --dataset my_dataset \
   --fold 1 \
-  --selection_method dts \
+  --selection_method dtb \
   --label_map class_a class_b \
   --system_prompt_1 system_prompts/my_dataset_1.md \
   --system_prompt_2 system_prompts/my_dataset_2.md
@@ -313,7 +312,7 @@ Use `--oracle_path` to pass a specific prompt bank or oracle-cache JSON file:
 python main.py \
   --dataset microscopy_lurcher \
   --fold 5 \
-  --selection_method dts \
+  --selection_method dtb \
   --oracle_path prompt_banks/microscopy_lurcher.json
 ```
 
@@ -334,8 +333,8 @@ main.py                      Main APT runner and CLI.
 config.json                  Current experiment defaults.
 setup_lurcher_data.py        Downloads and arranges Lurcher data from Hugging Face.
 utils.py                     JSONL loading, label extraction, split helpers.
-dts_sampling.py              DTS embedding and candidate scoring utilities.
-dts_diagnostics.py           DTS diagnostics and tuning support.
+dtb_sampling.py              DTB embedding and candidate scoring utilities.
+dtb_diagnostics.py           DTB diagnostics and tuning support.
 datasets/                    Download target for fold JSONL files and seed prompts.
 folds/                       Downloaded Hugging Face fold manifests.
 images/                      Downloaded Hugging Face image files.
@@ -347,7 +346,7 @@ logs/                        VLM logs, uncertainty caches, and intra-round logs.
 results/                     Consolidated final run summaries.
 val_results/                 Validation prediction dumps.
 test_results/                Final test prediction dumps.
-diagnostics/                 DTS diagnostic artifacts.
+diagnostics/                 DTB diagnostic artifacts.
 models/                      Optional local model files.
 ```
 
@@ -355,10 +354,10 @@ The repository also contains recovery, migration, verification, and correction h
 
 ## Outputs
 
-APT writes selection-method-specific artifacts so that different runs do not overwrite each other. For example, a DTS run with BiomedCLIP, batch size 10, and candidate pool 100 writes files with a suffix like:
+APT writes selection-method-specific artifacts so that different runs do not overwrite each other. For example, a DTB run with BiomedCLIP, batch size 10, and candidate pool 100 writes files with a suffix like:
 
 ```text
-dts_biomedclip_b=10_candidate-size=100
+dtb_biomedclip_b=10_candidate-size=100
 ```
 
 Typical outputs include:
@@ -444,7 +443,7 @@ The prompts should define the classification task, the visual/anatomical feature
 python main.py \
   --dataset my_dataset \
   --fold 1 \
-  --selection_method dts \
+  --selection_method dtb \
   --label_map class_a class_b \
   --system_prompt_1 system_prompts/my_dataset_1.md \
   --system_prompt_2 system_prompts/my_dataset_2.md
@@ -478,7 +477,7 @@ Start with one fold and a small test cap:
 python main.py \
   --dataset my_dataset \
   --fold 1 \
-  --selection_method dts \
+  --selection_method dtb \
   --label_map class_a class_b \
   --system_prompt_1 system_prompts/my_dataset_1.md \
   --system_prompt_2 system_prompts/my_dataset_2.md \

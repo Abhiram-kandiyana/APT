@@ -91,7 +91,7 @@ def _label_from_caption(caption: str, label_map: Optional[List[str]]) -> Optiona
 
 class DiagnosticsAndTuner:
     """
-    Per-round APT-DTS diagnostics + health checks + deterministic hyperparameter tuning.
+    Per-round APT-DTB diagnostics + health checks + deterministic hyperparameter tuning.
     """
 
     def __init__(
@@ -1376,9 +1376,9 @@ class DiagnosticsAndTuner:
             return None
 
         try:
-            from dts_sampling import score_candidates_with_dts
+            from dtb_sampling import score_candidates_with_dtb
 
-            _, meta_diag = score_candidates_with_dts(
+            _, meta_diag = score_candidates_with_dtb(
                 image_paths=diag_paths,
                 k=int(hyperparams["k"]),
                 k_rho=int(hyperparams["k_rho"]),

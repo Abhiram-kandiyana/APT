@@ -1,7 +1,7 @@
 """
-DTS scoring utilities for APT.
+DTB scoring utilities for APT.
 
-Implements the core equations from APT-DTS formal draft:
+Implements the core equations from APT-DTB formal draft:
 - Eq. (3): local density proxy rho_i from k_rho nearest-neighbor distances
 - Eq. (4): local threshold radius t_i from the k_t-th neighbor distance
 - Eq. (5)-(6): steepest-uphill parent pointer pi(i)
@@ -46,8 +46,8 @@ class CLIPImageEmbedder:
                 AutoImageProcessor = None
         except ImportError as e:
             raise ImportError(
-                "DTS selection requires torch and transformers. "
-                "Install them to use --selection_method dts."
+                "DTB selection requires torch and transformers. "
+                "Install them to use --selection_method dtb."
             ) from e
 
         if self.device is None:
@@ -133,7 +133,7 @@ class CLIPImageEmbedder:
         if self.model is None or self.processor is None:
             joined = " | ".join(load_errors) if load_errors else "unknown error"
             raise RuntimeError(
-                "Failed to load any DTS embedding model. "
+                "Failed to load any DTB embedding model. "
                 f"Tried: {candidates}. Details: {joined}"
             )
 
@@ -150,7 +150,7 @@ class CLIPImageEmbedder:
                 images = []
                 for image_path in batch_paths:
                     if not os.path.exists(image_path):
-                        raise FileNotFoundError(f"Image not found for DTS embedding: {image_path}")
+                        raise FileNotFoundError(f"Image not found for DTB embedding: {image_path}")
                     with Image.open(image_path) as img:
                         images.append(img.convert("RGB"))
 
@@ -347,7 +347,7 @@ def _save_embedding_cache(cache_path: str, image_paths: List[str], embeddings: n
     )
 
 
-def score_candidates_with_dts(
+def score_candidates_with_dtb(
     image_paths: List[str],
     k: int = 80,
     k_rho: int = 30,
@@ -361,7 +361,7 @@ def score_candidates_with_dts(
     mcluster_min: int = 20,
 ) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
     """
-    Compute DTS boundary scores for a candidate pool.
+    Compute DTB boundary scores for a candidate pool.
 
     Returns:
         - boundary_scores: score used for active-set ranking (higher = more boundary-like)

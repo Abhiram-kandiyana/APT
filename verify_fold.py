@@ -27,7 +27,7 @@ def test_fold_argument_logic():
     apt = APT(
         system_prompt_1_path="dummy1",
         system_prompt_2_path="dummy2",
-        selection_method="dts",
+        selection_method="dtb",
         K_uncertainty=K,
         fold=fold,
         max_rounds=20,

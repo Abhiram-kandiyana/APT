@@ -1,14 +1,14 @@
-# APT-DTS Diagnostics Glossary
+# APT-DTB Diagnostics Glossary
 
-This document defines the diagnostics terms and plots produced by APT-DTS.
+This document defines the diagnostics terms and plots produced by APT-DTB.
 
 ## Core Structure Terms
 - `Basin`: A cluster induced by density-tree parent pointers. Each point follows its parent pointer to a root; all points with the same root belong to one basin.
-- `Root`: A point with no valid uphill parent under DTS rules.
+- `Root`: A point with no valid uphill parent under DTB rules.
 - `C`: Number of basins (equivalently, number of unique roots).
-- `N_pool`: Number of candidate/unlabeled points used for current-round DTS geometry.
+- `N_pool`: Number of candidate/unlabeled points used for current-round DTB geometry.
 
-## DTS Hyperparameters (Logged Each Round)
+## DTB Hyperparameters (Logged Each Round)
 - `k`: Graph kNN size used to build neighborhood graph.
 - `k_rho`: Number of neighbors used for local density `rho_i`.
 - `k_t`: Rank used for threshold radius `t_i` (distance to `k_t`-th neighbor).
@@ -22,38 +22,38 @@ This document defines the diagnostics terms and plots produced by APT-DTS.
 ### Shared Selection Controls
 | Hyperparameter | Default | Description |
 |---|---:|---|
-| `selection_method` | required (`mdl` or `dts`) | Chooses active-set scoring strategy. |
+| `selection_method` | required (`ca` or `dtb`) | Chooses active-set scoring strategy. |
 | `candidate_pool_size` | `None` (treated as full pool; same as `-1`) | Number of unlabeled candidates sampled each round before scoring. |
 | `initial_batch_size` | `10` | Number of samples selected each round (`b`). |
 | `max_rounds` | `20` | Maximum active learning rounds. |
 | `stopping_accuracy` | `90.0` | Stop when validation average class accuracy (%) reaches this threshold. |
 
-### DTS-Specific
+### DTB-Specific
 | Hyperparameter | Default | Description |
 |---|---:|---|
-| `dts_k` | `60` | kNN size used to build DTS neighborhood graph. |
-| `dts_k_rho` | `30` | Neighbor count used for local density estimate `rho`. |
-| `dts_k_t` | `20` | Neighbor rank used for local threshold radius `t_i`. |
-| `dts_k_b` | `15` | Neighbor count used in boundary score computation. |
-| `dts_mutual_knn` | `False` | Use hybrid mutual-kNN for parent links and boundary scoring. |
-| `dts_mcluster_min` | `20` | Basin size threshold below which basins are treated as tiny. |
-| `dts_c_tiny` | `1` | Max selections allowed per tiny basin. |
-| `dts_max_per_basin` | `2` | Diversity cap per basin during selection. |
-| `dts_deg_min_tiny` | `10` | Tiny-basin fallback gate: minimum mutual degree. |
-| `dts_b_min_tiny` | `0.6` | Tiny-basin fallback gate: minimum boundary score. |
-| `dts_tune_hparams` | `True` | Enables diagnostics-driven hyperparameter tuning. |
-| `dts_clip_model_alias` | `biomedclip` | Embedding model alias used by DTS encoder (`biomedclip`, `clip`, `phikonv2`, `medsiglip`). |
-| `clip_batch_size` | `32` | Image embedding batch size for DTS encoder. |
+| `dtb_k` | `60` | kNN size used to build DTB neighborhood graph. |
+| `dtb_k_rho` | `30` | Neighbor count used for local density estimate `rho`. |
+| `dtb_k_t` | `20` | Neighbor rank used for local threshold radius `t_i`. |
+| `dtb_k_b` | `15` | Neighbor count used in boundary score computation. |
+| `dtb_mutual_knn` | `False` | Use hybrid mutual-kNN for parent links and boundary scoring. |
+| `dtb_mcluster_min` | `20` | Basin size threshold below which basins are treated as tiny. |
+| `dtb_c_tiny` | `1` | Max selections allowed per tiny basin. |
+| `dtb_max_per_basin` | `2` | Diversity cap per basin during selection. |
+| `dtb_deg_min_tiny` | `10` | Tiny-basin fallback gate: minimum mutual degree. |
+| `dtb_b_min_tiny` | `0.6` | Tiny-basin fallback gate: minimum boundary score. |
+| `dtb_tune_hparams` | `True` | Enables diagnostics-driven hyperparameter tuning. |
+| `dtb_clip_model_alias` | `biomedclip` | Embedding model alias used by DTB encoder (`biomedclip`, `clip`, `phikonv2`, `medsiglip`). |
+| `clip_batch_size` | `32` | Image embedding batch size for DTB encoder. |
 
-### MDL-Specific
+### CA-Specific
 | Hyperparameter | Default | Description |
 |---|---:|---|
 | `alpha` | `0.01` | Weight on caption length in caption complexity. |
 | `beta` | `0.1` | Weight on redundancy in caption complexity. |
-| `lambda_mdl` | `0.1` | MDL objective trade-off between error and description length. |
+| `lambda_mdl` | `0.1` | CA objective trade-off between error and description length. |
 | `lambda_c` | `0.5` | Selection-score trade-off between uncertainty and ECC. |
 | `K_uncertainty` | `5` | Number of stochastic VLM calls for uncertainty estimation. |
-| `mdl_tol` | `1e-3` | Convergence tolerance for MDL optimization. |
+| `mdl_tol` | `1e-3` | Convergence tolerance for CA optimization. |
 | `selection_batch_size` | `5` | VLM batch size during sample selection scoring. |
 | `val_batch_size` | `5` | VLM batch size during validation scoring. |
 
@@ -133,11 +133,11 @@ A trigger fires when its condition is true:
 
 ### `basin_prototypes.png`
 For each of the largest non-tiny basins, shows three representative samples:
-- `central`: highest `rho` point (density-central under DTS proxy).
+- `central`: highest `rho` point (density-central under DTB proxy).
 - `median_rho`: median-by-`rho` point in that basin.
 - `high_boundary`: highest boundary-score point in that basin.
 
-Note: this is **not** geometric centroid nearest-neighbor selection; it is DTS-metric based.
+Note: this is **not** geometric centroid nearest-neighbor selection; it is DTB-metric based.
 
 ### `boundary_bridges.png`
 For each selected sample, shows:
@@ -148,7 +148,7 @@ Purpose: visually validate that high-boundary selections connect/lie near cross-
 
 ## Purity Diagnostics (Post-Selection Only, No Leakage)
 - Executed only after current round selection and after labels are known.
-- Uses `Z_diag = unlabeled_after_selection + all_labeled_so_far` and reruns DTS clustering for diagnostics only.
+- Uses `Z_diag = unlabeled_after_selection + all_labeled_so_far` and reruns DTB clustering for diagnostics only.
 - Purity stats computed only on basins with sufficient labeled count:
   - rounds 1-2: minimum 3 labeled samples per basin,
   - later rounds: minimum 5.

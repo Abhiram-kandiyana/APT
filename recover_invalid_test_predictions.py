@@ -21,7 +21,7 @@ from numbers import Integral
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from main import APT, _selection_artifact_token, vlm_query, with_selection_suffix
+from main import APT, _selection_artifact_token, normalize_selection_method, vlm_query, with_selection_suffix
 
 
 def _resolve_root(path_value: str) -> str:
@@ -63,11 +63,14 @@ def _maybe_relpath(path: str) -> str:
 
 def _selection_base_from_token(selection_token: str) -> str:
     token = str(selection_token).strip().lower()
-    if token.startswith("dts_") or token == "dts":
-        return "dts"
-    for base in ("mdl", "entropy", "random"):
+    if token.startswith("dtb_") or token == "dtb" or token.startswith("dts_") or token == "dts":
+        return "dtb"
+    for base in ("ca", "u", "random"):
         if token == base or token.startswith(f"{base}_"):
             return base
+    legacy = normalize_selection_method(token.split("_", 1)[0])
+    if legacy in ("ca", "u", "dtb", "random"):
+        return legacy
     return token.split("_", 1)[0]
 
 
@@ -103,12 +106,13 @@ def _resolve_selection_token(
 
     method_raw = str(selection_method).strip()
     lower = method_raw.lower()
-    if "candidate-size=" in lower or "_b=" in lower or lower.startswith("dts_"):
+    if "candidate-size=" in lower or "_b=" in lower or lower.startswith(("dtb_", "dts_")):
         return method_raw
 
+    method_base = normalize_selection_method(method_raw)
     available = _discover_selection_tokens(test_results_root, dataset, fold)
-    prefix_matches = [tok for tok in available if tok.lower().startswith(lower)]
-    exact_matches = [tok for tok in available if tok.lower() == lower]
+    prefix_matches = [tok for tok in available if tok.lower().startswith(method_base)]
+    exact_matches = [tok for tok in available if tok.lower() == method_base]
     if len(exact_matches) == 1:
         return exact_matches[0]
     if len(prefix_matches) == 1:
@@ -120,7 +124,7 @@ def _resolve_selection_token(
         )
 
     return _selection_artifact_token(
-        selection_method=selection_method,
+        selection_method=method_base,
         dts_clip_model_name=dts_clip_model_name,
         active_set_batch_size=initial_batch_size,
         candidate_pool_size=candidate_pool_size,
@@ -377,7 +381,7 @@ def parse_args() -> argparse.Namespace:
         "--selection_method",
         type=str,
         required=True,
-        help="Base method (mdl/entropy/dts/random) or full artifact token.",
+        help="Base method (ca/u/dtb/random) or full artifact token. Legacy mdl/entropy/dts aliases are accepted.",
     )
     parser.add_argument(
         "--selection_artifact_token",
@@ -408,7 +412,7 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("--initial_batch_size", type=int, default=10)
     parser.add_argument("--candidate_pool_size", type=int, default=None)
-    parser.add_argument("--dts_clip_model_name", type=str, default=None)
+    parser.add_argument("--dtb_clip_model_name", "--dts_clip_model_name", dest="dts_clip_model_name", type=str, default=None)
 
     parser.add_argument("--vlm_query_batch_size", type=int, default=5)
     parser.add_argument("--vlm_timeout_s", type=float, default=120.0)

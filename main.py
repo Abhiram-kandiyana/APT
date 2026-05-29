@@ -1,5 +1,5 @@
 """
-Portions of APT–MDL logic were taken from Dr. Ankur Mali Overleaf
+Portions of APT–CA logic were taken from Dr. Ankur Mali Overleaf
 """
 import numpy as np
 import random
@@ -25,10 +25,10 @@ from pathlib import Path
 from datetime import datetime
 from utils import *
 
-# Lazily initialized so non-MDL runs do not fetch/load tokenizer resources at import time.
+# Lazily initialized so non-CA runs do not fetch/load tokenizer resources at import time.
 enc = None
 
-# Lazily initialized so DTS mode does not touch HuggingFace tokenizers at import time.
+# Lazily initialized so DTB mode does not touch HuggingFace tokenizers at import time.
 st_model = None
 
 load_dotenv()
@@ -37,7 +37,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 _LOCAL_TRANSFORMERS_VLM_CACHE: Dict[Tuple[Any, ...], Dict[str, Any]] = {}
 _LOCAL_MLX_VLM_CACHE: Dict[Tuple[Any, ...], Dict[str, Any]] = {}
 
-# Short alias -> full Hugging Face model id for DTS image embeddings.
+# Short alias -> full Hugging Face model id for DTB image embeddings.
 DTS_CLIP_MODEL_ALIASES: Dict[str, str] = {
     "biomedclip": "microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224",
     "clip": "openai/clip-vit-base-patch32",
@@ -164,7 +164,7 @@ def with_selection_suffix(file_path: str, selection_method: str) -> str:
     if not file_path:
         return file_path
 
-    selection = str(selection_method).lower().strip()
+    selection = normalize_selection_method(selection_method)
     suffix_token = f"_{selection}"
     path_obj = Path(file_path)
 
@@ -181,6 +181,23 @@ def _safe_path_token(value: Any, default: str = "unknown") -> str:
     token = re.sub(r"[^A-Za-z0-9._=-]+", "_", token)
     token = token.strip("._-")
     return token or default
+
+
+SELECTION_METHOD_ALIASES = {
+    "entropy": "u",
+    "apt-u": "u",
+    "aptu": "u",
+    "mdl": "ca",
+    "apt-ca": "ca",
+    "dts": "dtb",
+    "apt-dtb": "dtb",
+    "apt": "random",
+}
+
+
+def normalize_selection_method(selection_method: str) -> str:
+    selection = str(selection_method or "").lower().strip()
+    return SELECTION_METHOD_ALIASES.get(selection, selection)
 
 
 def _model_artifact_token(model_name: Optional[str]) -> str:
@@ -529,7 +546,7 @@ def _selection_artifact_token(
     active_set_batch_size: Optional[int] = None,
     candidate_pool_size: Optional[int] = None,
 ) -> str:
-    selection = str(selection_method or "mdl").lower().strip()
+    selection = normalize_selection_method(selection_method or "ca")
     if selection in ("zero_shot", "one_shot"):
         return selection
 
@@ -547,22 +564,22 @@ def _selection_artifact_token(
     except (TypeError, ValueError):
         cand_token = ""
 
-    if selection != "dts":
-        base = _safe_path_token(selection, default="mdl")
+    if selection != "dtb":
+        base = _safe_path_token(selection, default="ca")
         return f"{base}{batch_token}{cand_token}"
 
     model_alias = _dts_clip_model_alias(dts_clip_model_name)
     if model_alias == "biomedclip":
-        return f"dts_biomedclip{batch_token}{cand_token}"
+        return f"dtb_biomedclip{batch_token}{cand_token}"
     if model_alias == "clip":
-        return f"dts_clip{batch_token}{cand_token}"
+        return f"dtb_clip{batch_token}{cand_token}"
     if model_alias == "phikonv2":
-        return f"dts_phikonv2{batch_token}{cand_token}"
+        return f"dtb_phikonv2{batch_token}{cand_token}"
     if model_alias == "medsiglip":
-        return f"dts_medsiglip{batch_token}{cand_token}"
+        return f"dtb_medsiglip{batch_token}{cand_token}"
 
     model_name = str(dts_clip_model_name or "").strip().lower()
-    return f"dts_{_safe_path_token(model_name or 'clip', default='clip')}{batch_token}{cand_token}"
+    return f"dtb_{_safe_path_token(model_name or 'clip', default='clip')}{batch_token}{cand_token}"
 
 
 def _dts_clip_model_alias(dts_clip_model_name: Optional[str]) -> Optional[str]:
@@ -596,7 +613,7 @@ def _resolve_dts_clip_model_from_inputs(
     if alias:
         if alias not in DTS_CLIP_MODEL_ALIASES:
             valid = ", ".join(sorted(DTS_CLIP_MODEL_ALIASES.keys()))
-            raise ValueError(f"Invalid dts_clip_model_alias='{alias}'. Valid aliases: {valid}")
+            raise ValueError(f"Invalid dtb_clip_model_alias='{alias}'. Valid aliases: {valid}")
         return DTS_CLIP_MODEL_ALIASES[alias]
     return _resolve_dts_clip_model_name(dts_clip_model_name)
 
@@ -613,7 +630,7 @@ def build_dts_run_output_dir(
     """
     dataset_token = _safe_path_token(dataset_name, default="dataset")
     fold_token = _safe_path_token(fold, default="na")
-    selection_token = _safe_path_token(selection_token, default="dts")
+    selection_token = _safe_path_token(selection_token, default="dtb")
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     prefix = f"{dataset_token}_fold-{fold_token}_{selection_token}_{timestamp}"
     root = str(base_outdir or "diagnostics")
@@ -687,7 +704,7 @@ def set_global_random_seed(seed: int) -> None:
         if hasattr(torch, "use_deterministic_algorithms"):
             torch.use_deterministic_algorithms(True)
     except Exception:
-        # Torch may not be installed for non-DTS runs.
+        # Torch may not be installed for non-DTB runs.
         pass
 
 
@@ -722,8 +739,8 @@ def build_round_prompt_paths(
     dataset_token = _safe_path_token(dataset_name, default="dataset")
     fold_token = _safe_path_token(fold, default="na")
     selection_token = _safe_path_token(
-        (selection_method or "mdl").lower().strip(),
-        default="mdl",
+        normalize_selection_method(selection_method or "ca"),
+        default="ca",
     )
     fold_dir = os.path.join(prompts_root, dataset_token, f"fold-{fold_token}_{selection_token}")
     os.makedirs(fold_dir, exist_ok=True)
@@ -1608,7 +1625,7 @@ def selection_score(
 
 
 # ============================================================
-# MDL LOSS
+# CA LOSS
 # ============================================================
 
 def zero_one_error(preds: List[int], labels: List[int]) -> float:
@@ -1694,7 +1711,7 @@ def mdl_loss(
 
 
 # ============================================================
-# APT–MDL CLASS
+# APT–CA CLASS
 # ============================================================
 
 class APT:
@@ -1749,10 +1766,10 @@ class APT:
         self.lambda_c = lambda_c
         self.K_uncertainty = K_uncertainty
         # Explicit strategy switch:
-        # "mdl" keeps legacy MDL score, "entropy" uses Shannon entropy,
-        # "dts" uses CLIP+density-tree, and "random" samples uniformly at random.
-        self.selection_method = selection_method.lower()
-        if self.selection_method not in ("mdl", "entropy", "dts", "random", "zero_shot", "one_shot"):
+        # "ca" is caption-aware scoring, "u" is uncertainty-only scoring,
+        # "dtb" uses CLIP+density-tree boundary scoring, and "random" samples uniformly.
+        self.selection_method = normalize_selection_method(selection_method)
+        if self.selection_method not in ("ca", "u", "dtb", "random", "zero_shot", "one_shot"):
             raise ValueError(f"Unsupported selection_method: {selection_method}")
         if self.selection_method == "zero_shot":
             self.S_2_template = "Classify the {N} images below based on the treatment. You should focus on six features for your classification: cellular organization, layering pattern, purkinje cells, granule cell layer, overall structure, and staining pattern. Your rationale should include descriptions of all six features. Your response must be given in the exact format for each image. 'R:' should indicate the textual explanation of the image based on the features described above. 'C:' should indicate the classification based on your rationale - either 'lurcher' for Lurcher mutant group or 'wild' for wild-type/normal. Be concise and specific. Do not include anything else in the output."
@@ -1819,8 +1836,8 @@ class APT:
     # -------------------------------------------------------
     def evaluate(self, val_data: List[LabeledExample], round_num: int, **gen_kwargs) -> float:
         """
-        Calculates MDL loss, accuracy, and logs results.
-        Returns the MDL loss.
+        Calculates CA loss, accuracy, and logs results.
+        Returns the CA loss.
         """
         print("Performing evaluation for round {}.".format(round_num))
         # Call mdl_loss to get loss and predictions
@@ -1965,7 +1982,7 @@ class APT:
             prompt_items.append({
                 "image_path": abs_img,
                 "class": label_str,
-                # Keep both keys to stay compatible with APT-v3/oracle.py and current MDL naming.
+                # Keep both keys to stay compatible with APT-v3/oracle.py and current CA naming.
                 "rationale": rationale,
                 "explanation": rationale
             })
@@ -2212,8 +2229,8 @@ class APT:
             "prompt_set": [{"image_path": str(x), "caption": c} for x, c in self.prompt_set],
             "unlabeled_data": [(str(x), l) for x, l in self.unlabeled_data]
         }
-        if self.selection_method == "dts":
-            round_state["dts_hyperparameters"] = {
+        if self.selection_method == "dtb":
+            round_state["dtb_hyperparameters"] = {
                 "k": int(self.dts_k),
                 "k_rho": int(self.dts_k_rho),
                 "k_t": int(self.dts_k_t),
@@ -2225,7 +2242,7 @@ class APT:
                 "b_min_tiny": float(self.dts_b_min_tiny),
                 "tune_hparams": bool(self.dts_tune_hparams),
             }
-            round_state["dts_tuner_state"] = {
+            round_state["dtb_tuner_state"] = {
                 "overmerged_streak": int(self.dts_tuner_state.get("overmerged_streak", 0)),
                 "fragmented_streak": int(self.dts_tuner_state.get("fragmented_streak", 0)),
                 "boundary_flat_streak": int(self.dts_tuner_state.get("boundary_flat_streak", 0)),
@@ -2267,6 +2284,8 @@ class APT:
                             "selection_method",
                             "prompt_set",
                             "unlabeled_data",
+                            "dtb_hyperparameters",
+                            "dtb_tuner_state",
                             "dts_hyperparameters",
                             "dts_tuner_state",
                         )
@@ -2304,8 +2323,8 @@ class APT:
             with open(checkpoint_path, 'r') as f:
                 state = json.load(f)
 
-            # Backward compatibility: old checkpoints without this field are MDL.
-            checkpoint_method = state.get("selection_method", "mdl")
+            # Backward compatibility: old checkpoints used mdl/entropy/dts names.
+            checkpoint_method = normalize_selection_method(state.get("selection_method", "ca"))
             if checkpoint_method != self.selection_method:
                 raise ValueError(
                     f"Checkpoint selection_method={checkpoint_method} does not match "
@@ -2364,10 +2383,13 @@ class APT:
                 except (TypeError, ValueError):
                     last_validation_avg_class_accuracy = None
 
-            if self.selection_method == "dts":
+            if self.selection_method == "dtb":
                 dts_hparams = state_for_resume.get(
-                    "dts_hyperparameters",
-                    state.get("dts_hyperparameters", {}),
+                    "dtb_hyperparameters",
+                    state_for_resume.get(
+                        "dts_hyperparameters",
+                        state.get("dtb_hyperparameters", state.get("dts_hyperparameters", {})),
+                    ),
                 )
                 self.dts_k = int(dts_hparams.get("k", self.dts_k))
                 self.dts_k_rho = int(dts_hparams.get("k_rho", self.dts_k_rho))
@@ -2379,8 +2401,11 @@ class APT:
                 self.dts_deg_min_tiny = int(dts_hparams.get("deg_min_tiny", self.dts_deg_min_tiny))
                 self.dts_b_min_tiny = float(dts_hparams.get("b_min_tiny", self.dts_b_min_tiny))
                 saved_state = state_for_resume.get(
-                    "dts_tuner_state",
-                    state.get("dts_tuner_state", {}),
+                    "dtb_tuner_state",
+                    state_for_resume.get(
+                        "dts_tuner_state",
+                        state.get("dtb_tuner_state", state.get("dts_tuner_state", {})),
+                    ),
                 )
                 self.dts_tuner_state = {
                     "overmerged_streak": int(saved_state.get("overmerged_streak", 0)),
@@ -2712,7 +2737,7 @@ class APT:
         )
         dataset_token = _safe_path_token(gen_kwargs.get("dataset", "dataset"), default="dataset")
         fold_token = _safe_path_token(self.fold if self.fold is not None else gen_kwargs.get("fold"), default="na")
-        selection_token = _safe_path_token(self.selection_artifact_token, default="mdl")
+        selection_token = _safe_path_token(self.selection_artifact_token, default="ca")
         fold_dir = os.path.join(results_root, dataset_token, f"fold-{fold_token}")
         os.makedirs(fold_dir, exist_ok=True)
         results_path = os.path.join(fold_dir, f"results_selection={selection_token}.json")
@@ -2755,7 +2780,7 @@ class APT:
         )
         dataset_token = _safe_path_token(gen_kwargs.get("dataset", "dataset"), default="dataset")
         fold_token = _safe_path_token(self.fold if self.fold is not None else gen_kwargs.get("fold"), default="na")
-        selection_token = _safe_path_token(self.selection_artifact_token, default="mdl")
+        selection_token = _safe_path_token(self.selection_artifact_token, default="ca")
         fold_dir = os.path.join(results_root, dataset_token, f"fold-{fold_token}")
         os.makedirs(fold_dir, exist_ok=True)
         results_path = os.path.join(fold_dir, f"results_selection={selection_token}.json")
@@ -2858,7 +2883,7 @@ class APT:
     ) -> Optional[str]:
         dataset_token = _safe_path_token(dataset_name, default="dataset")
         fold_token = _safe_path_token(fold, default="na")
-        selection_token = _safe_path_token((selection_method or self.selection_method), default="mdl")
+        selection_token = _safe_path_token((selection_method or self.selection_method), default="ca")
         fold_dir = os.path.join(prompts_root, dataset_token, f"fold-{fold_token}_{selection_token}")
         os.makedirs(fold_dir, exist_ok=True)
 
@@ -2971,7 +2996,7 @@ class APT:
 
         val_results_root = str(gen_kwargs.get("val_results_root", "val_results"))
         dataset_token = _safe_path_token(gen_kwargs.get("dataset", "dataset"), default="dataset")
-        selection_token = _safe_path_token(self.selection_artifact_token, default="mdl")
+        selection_token = _safe_path_token(self.selection_artifact_token, default="ca")
         fold_token = _safe_path_token(self.fold if self.fold is not None else gen_kwargs.get("fold"), default="na")
         round_token = f"{int(round_num):02d}"
         val_dir = os.path.join(val_results_root, dataset_token, f"selection_method={selection_token}")
@@ -3205,7 +3230,7 @@ class APT:
 
         test_results_root = str(gen_kwargs.get("test_results_root", "test_results"))
         dataset_token = _safe_path_token(gen_kwargs.get("dataset", "dataset"), default="dataset")
-        selection_token = _safe_path_token(self.selection_artifact_token, default="mdl")
+        selection_token = _safe_path_token(self.selection_artifact_token, default="ca")
         fold_token = _safe_path_token(self.fold if self.fold is not None else gen_kwargs.get("fold"), default="na")
         round_token = f"{int(round_num):02d}"
         test_dir = os.path.join(test_results_root, dataset_token, f"selection_method={selection_token}")
@@ -3541,8 +3566,8 @@ class APT:
 
         dts_tuner = None
         dts_diagnostics_path = None
-        if self.selection_method == "dts":
-            from dts_diagnostics import DiagnosticsAndTuner
+        if self.selection_method == "dtb":
+            from dtb_diagnostics import DiagnosticsAndTuner
 
             dataset_name = str(gen_kwargs.get("dataset", "dataset"))
             fold_for_run = self.fold if self.fold is not None else gen_kwargs.get("fold")
@@ -3554,7 +3579,7 @@ class APT:
             )
             os.makedirs(dts_run_outdir, exist_ok=True)
             dts_diagnostics_path = os.path.join(dts_run_outdir, "diagnostics.jsonl")
-            print(f"DTS diagnostics output directory: {dts_run_outdir}")
+            print(f"DTB diagnostics output directory: {dts_run_outdir}")
             dts_tuner = DiagnosticsAndTuner(
                 diagnostics_jsonl_path=dts_diagnostics_path,
                 diagnostic_outdir=dts_run_outdir,
@@ -3569,7 +3594,7 @@ class APT:
                 use_mutual_knn=self.dts_mutual_knn,
             )
             if not self.dts_tune_hparams:
-                print("DTS tuner is in log-only mode: hyperparameters will not be mutated.")
+                print("DTB tuner is in log-only mode: hyperparameters will not be mutated.")
 
         for r in range(start_round, self.max_rounds + 1):
             print(f"\n=== Round {r} ===")
@@ -3603,7 +3628,7 @@ class APT:
             intra_round_log_path = os.path.join(self.logs_dir, intra_round_log_name)
             intra_round_embed_cache_path = intra_round_log_path.replace(
                 "_log.jsonl",
-                f"_{_safe_path_token(self.selection_artifact_token, default='dts')}_embeddings.npz",
+                f"_{_safe_path_token(self.selection_artifact_token, default='dtb')}_embeddings.npz",
             )
 
             # Backward-compatible resume: adopt known legacy intra-round naming patterns.
@@ -3703,14 +3728,14 @@ class APT:
             if selection_gen_kwargs.get("fold", None) is None and self.fold is not None:
                 selection_gen_kwargs["fold"] = int(self.fold)
 
-            if self.selection_method == "dts":
-                # DTS scores are not independent per item, so rebuild candidate_scores from scratch.
+            if self.selection_method == "dtb":
+                # DTB scores are not independent per item, so rebuild candidate_scores from scratch.
                 candidate_scores = []
-                # For DTS, scores are computed jointly over the current candidate subset U_r.
-                from dts_sampling import score_candidates_with_dts
+                # For DTB, scores are computed jointly over the current candidate subset U_r.
+                from dtb_sampling import score_candidates_with_dtb
 
                 image_paths = [tuple(entry["item"])[0] for entry in all_candidates]
-                dts_scores, dts_meta = score_candidates_with_dts(
+                dts_scores, dts_meta = score_candidates_with_dtb(
                     image_paths=image_paths,
                     k=self.dts_k,
                     k_rho=self.dts_k_rho,
@@ -3725,7 +3750,7 @@ class APT:
 
                 for idx, entry in enumerate(all_candidates):
                     entry["score"] = float(dts_scores[idx])
-                    entry["dts_meta"] = {
+                    entry["dtb_meta"] = {
                         "rho": float(dts_meta["rho"][idx]),
                         "root": int(dts_meta["root"][idx]),
                         "root_eff": int(dts_meta.get("root_eff", dts_meta["root"])[idx]),
@@ -3735,18 +3760,18 @@ class APT:
                         "first_nn_distance": float(dts_meta["first_nn_distance"][idx]),
                     }
 
-                # Rewrite entire log because DTS is a global computation.
+                # Rewrite entire log because DTB is a global computation.
                 try:
                     with open(intra_round_log_path, 'w', encoding='utf-8') as f:
                         for entry in all_candidates:
                             f.write(json.dumps(entry) + "\n")
                 except Exception as e:
-                    print(f"Error writing DTS intra-round log: {e}")
+                    print(f"Error writing DTB intra-round log: {e}")
 
                 for idx, entry in enumerate(all_candidates):
                     candidate_scores.append((float(dts_scores[idx]), tuple(entry["item"])))
-            elif self.selection_method == "mdl":
-                # Process remaining with MDL selection score
+            elif self.selection_method == "ca":
+                # Process remaining with CA selection score
                 with tqdm(total=len(all_candidates), initial=processed_count, desc="Calculating Scores") as pbar:
                     for i, entry in enumerate(all_candidates):
                         if entry["score"] is not None:
@@ -3776,8 +3801,8 @@ class APT:
                             print(f"Error writing to intra-round log: {e}")
 
                         pbar.update(1)
-            elif self.selection_method == "entropy":
-                # Entropy-only selection score (APT-U Section 4).
+            elif self.selection_method == "u":
+                # U-only selection score (APT-U Section 4).
                 with tqdm(total=len(all_candidates), initial=processed_count, desc="Calculating Scores") as pbar:
                     for i, entry in enumerate(all_candidates):
                         if entry["score"] is not None:
@@ -3834,7 +3859,7 @@ class APT:
             
             num_to_select = min(initial_batch_size, len(candidate_scores))
 
-            if self.selection_method == "dts":
+            if self.selection_method == "dtb":
                 path_to_idx = {
                     str(tuple(entry["item"])[0]): idx
                     for idx, entry in enumerate(all_candidates)
@@ -4044,7 +4069,7 @@ class APT:
 
                 preview_idx = ranked_idx[:10]
                 print(
-                    "DTS top candidates (pre-selection): "
+                    "DTB top candidates (pre-selection): "
                     f"{json.dumps([_format_candidate_row(int(idx)) for idx in preview_idx])}"
                 )
 
@@ -4258,7 +4283,7 @@ class APT:
                 for stage in stage_specs:
                     top5 = [_format_candidate_row(int(idx)) for idx in stage["ranked"][:5]]
                     print(
-                        "DTS stage ranked list: "
+                        "DTB stage ranked list: "
                         f"{json.dumps({'stage_name': stage['name'], 'pool_size': int(stage['pool_size']), 'ranked_list_size': int(len(stage['ranked'])), 'top5': top5})}"
                     )
 
@@ -4346,7 +4371,7 @@ class APT:
                 stage1_sel_med = float(np.median(stage1_scores)) if stage1_scores else float("nan")
                 stage1_sel_max = float(np.max(stage1_scores)) if stage1_scores else float("nan")
                 print(
-                    "DTS Stage1 hi-band stats: "
+                    "DTB Stage1 hi-band stats: "
                     f"stage1_bmax={stage1_bmax:.6f}, "
                     f"stage1_b_floor={stage1_b_floor:.6f}, "
                     f"stage1_candidates_count={int(len(stage1_candidates))}, "
@@ -4359,9 +4384,9 @@ class APT:
                     f"selected_bscore_median={stage1_sel_med:.6f}, "
                     f"selected_bscore_max={stage1_sel_max:.6f}"
                 )
-                print(f"DTS global selection trace: {json.dumps(global_selection_trace)}")
-                print(f"DTS selected_count_by_stage: {json.dumps(selected_count_by_stage)}")
-                print(f"DTS per_basin_cap_rejections_by_stage: {json.dumps(per_basin_cap_rejections_by_stage)}")
+                print(f"DTB global selection trace: {json.dumps(global_selection_trace)}")
+                print(f"DTB selected_count_by_stage: {json.dumps(selected_count_by_stage)}")
+                print(f"DTB per_basin_cap_rejections_by_stage: {json.dumps(per_basin_cap_rejections_by_stage)}")
 
                 if fill_strategy_counts["last_resort_outlier"] > 0:
                     print(
@@ -4407,7 +4432,7 @@ class APT:
                         "deg_min_tiny": int(deg_min_tiny),
                         "b_min_tiny": float(b_min_tiny),
                     }
-                    raise RuntimeError(f"DTS Fill-to-b failed: {json.dumps(stats_dump)}")
+                    raise RuntimeError(f"DTB Fill-to-b failed: {json.dumps(stats_dump)}")
 
                 selected_big_count = int(sum(bool(big_mask[idx]) for idx in dts_selected_indices))
                 selected_tiny_count = int(sum(bool(tiny_mask[idx]) for idx in dts_selected_indices))
@@ -4416,9 +4441,9 @@ class APT:
                 selected_roots_eff = [int(roots_eff[idx]) for idx in dts_selected_indices]
                 selected_rows = [_format_candidate_row(int(idx)) for idx in dts_selected_indices]
                 selected_per_basin_counts = Counter(int(roots_eff[idx]) for idx in dts_selected_indices)
-                print(f"DTS selected candidates (ordered): {json.dumps(selected_rows)}")
+                print(f"DTB selected candidates (ordered): {json.dumps(selected_rows)}")
                 print(
-                    "DTS selected basin coverage: "
+                    "DTB selected basin coverage: "
                     f"selected_unique_basins={int(len(selected_per_basin_counts))}, "
                     f"selected_per_basin_counts={json.dumps({str(k): int(v) for k, v in sorted(selected_per_basin_counts.items(), key=lambda kv: kv[0])})}"
                 )
@@ -4441,7 +4466,7 @@ class APT:
                 }
 
                 print(
-                    "DTS selection constraints: "
+                    "DTB selection constraints: "
                     f"mcluster_min={self.dts_mcluster_min}, "
                     f"max_per_basin={self.dts_max_per_basin}, "
                     f"relaxed_per_basin_cap={cap_relaxed_to}, "
@@ -4459,7 +4484,7 @@ class APT:
                     f"(seed={random_select_seed})."
                 )
             else:
-                # MDL/entropy: plain top-score selection.
+                # CA/U: plain top-score selection.
                 for i in range(num_to_select):
                     score, item = candidate_scores[i]
                     A_r.append(item[0])
@@ -4522,7 +4547,7 @@ class APT:
             # Update prompt set
             self.prompt_set.extend(A_e_r)
 
-            if self.selection_method == "dts" and dts_tuner is not None and dts_scores is not None and dts_meta is not None:
+            if self.selection_method == "dtb" and dts_tuner is not None and dts_scores is not None and dts_meta is not None:
                 current_hparams = {
                     "k": int(self.dts_k),
                     "k_rho": int(self.dts_k_rho),
@@ -4555,7 +4580,7 @@ class APT:
                 # are available, and never fed back into the current round selection decisions.
                 try:
                     dts_selection_stats = dict(dts_selection_stats or {})
-                    dts_selection_stats["dts_tune_hparams_enabled"] = bool(self.dts_tune_hparams)
+                    dts_selection_stats["dtb_tune_hparams_enabled"] = bool(self.dts_tune_hparams)
                     diagnostics, next_hparams, next_tuner_state = dts_tuner.run_round_diagnostics(
                         round_index=r,
                         n_pool=len(all_candidates),
@@ -4589,16 +4614,16 @@ class APT:
                         selection_stats=dts_selection_stats,
                     )
                 except Exception as e:
-                    print(f"WARNING [DTS-DIAGNOSTICS]: non-blocking diagnostics failure: {e}")
+                    print(f"WARNING [DTB-DIAGNOSTICS]: non-blocking diagnostics failure: {e}")
                     diagnostics = {}
                     next_hparams = current_hparams
                     next_tuner_state = self.dts_tuner_state
 
                 checks = diagnostics.get("health_checks", {})
                 if checks.get("overmerged"):
-                    print("WARNING [OVER-MERGED]: DTS basins appear over-collapsed.")
+                    print("WARNING [OVER-MERGED]: DTB basins appear over-collapsed.")
                 if checks.get("fragmented"):
-                    print("WARNING [FRAGMENTED]: DTS basins appear too fragmented.")
+                    print("WARNING [FRAGMENTED]: DTB basins appear too fragmented.")
                 if checks.get("mutual_sparse"):
                     print("WARNING [MUTUAL-SPARSE]: mutual-kNN graph is sparse.")
                 if checks.get("outlier_heavy"):
@@ -4618,7 +4643,7 @@ class APT:
                     self.dts_c_tiny = int(next_hparams["c_tiny"])
                     self.dts_max_per_basin = int(next_hparams["max_per_basin"])
                 else:
-                    print("DTS hyperparameter tuning is disabled; keeping current DTS hyperparameters unchanged.")
+                    print("DTB hyperparameter tuning is disabled; keeping current DTB hyperparameters unchanged.")
 
             stop_due_to_accuracy = False
             validation_avg_acc = None
@@ -4770,6 +4795,11 @@ def parse_arguments():
         try:
             with open(args_temp.config, 'r') as f:
                 config_defaults = json.load(f)
+            for key in list(config_defaults.keys()):
+                if key.startswith("dtb_"):
+                    config_defaults.setdefault(f"dts_{key[len('dtb_'):]}", config_defaults[key])
+            if "selection_method" in config_defaults:
+                config_defaults["selection_method"] = normalize_selection_method(config_defaults["selection_method"])
             print(f"Loaded configuration from {args_temp.config}")
         except Exception as e:
             print(f"Error loading config file {args_temp.config}: {e}")
@@ -4784,7 +4814,7 @@ def parse_arguments():
     parser.add_argument("--dataset", type=str, required=False,
                         help="Name of the dataset.")
     parser.add_argument("--fold", type=int, default=None,
-                        help="Fold number (optional). If provided, sets default paths for data and init prompts.")
+                        help="Fold number (optional). If provided, sets default paths for fold data and seed prompts.")
     parser.add_argument("--folds", type=str, default=None,
                         help="Comma-separated folds to run in sequence (e.g., '5,6,10').")
     parser.add_argument("--val_json_path", type=str, default=None,
@@ -4822,70 +4852,79 @@ def parse_arguments():
     parser.add_argument("--results_root", type=str, default="results",
                         help="Directory root for consolidated per-fold JSON summaries.")
 
-    # Selection method and DTS parameters
-    parser.add_argument("--selection_method", type=str, required=True, choices=["mdl", "entropy", "dts", "random", "zero_shot", "one_shot"],
-                        help="Method to run: active-set scoring via 'mdl', 'entropy', 'dts', or 'random', or test-only 'zero_shot'/'one_shot'.")
+    # Selection method and DTB parameters
+    parser.add_argument(
+        "--selection_method",
+        type=normalize_selection_method,
+        required=True,
+        choices=["ca", "u", "dtb", "random", "zero_shot", "one_shot"],
+        help=(
+            "Method to run: active-set scoring via 'ca' (APT-CA), 'u' (APT-U), "
+            "'dtb' (APT-DTB), or 'random' (APT). Legacy aliases 'mdl', "
+            "'entropy', and 'dts' are accepted and normalized."
+        ),
+    )
     parser.add_argument("--one_shot_prompt_set_path", type=str,
                         default="prompt_sets/microscopy_lurcher/one-shot-prompting/prompts_corrected.json",
                         help="Corrected prompt JSON used by --selection_method one_shot.")
-    parser.add_argument("--dts_k", type=int, default=60,
-                        help="k for DTS neighborhood graph construction.")
-    parser.add_argument("--dts_k_rho", type=int, default=30,
-                        help="k_rho neighbors for DTS density proxy.")
-    parser.add_argument("--dts_k_t", type=int, default=20,
-                        help="k_t neighbor index used to define DTS local threshold radius.")
-    parser.add_argument("--dts_k_b", type=int, default=15,
-                        help="k_b neighbors used to compute DTS boundary score.")
-    parser.add_argument("--dts_mutual_knn", action="store_true",
-                        help="Use HYBRID mutual-kNN in DTS: rho and t_i from standard kNN; parent links and boundary use mutual-kNN.")
-    parser.add_argument("--dts_mcluster_min", type=int, default=20,
-                        help="Minimum cluster mass threshold for tiny-cluster safeguards in DTS.")
-    parser.add_argument("--dts_c_tiny", type=int, default=1,
-                        help="Maximum selections allowed per tiny cluster (size < dts_mcluster_min) in DTS.")
-    parser.add_argument("--dts_max_per_basin", type=int, default=2,
-                        help="Maximum selections allowed per basin in DTS (auto-tuner may set 1 or 2).")
-    parser.add_argument("--dts_deg_min_tiny", type=int, default=10,
+    parser.add_argument("--dtb_k", "--dts_k", dest="dts_k", metavar="DTB_K", type=int, default=60,
+                        help="k for DTB neighborhood graph construction.")
+    parser.add_argument("--dtb_k_rho", "--dts_k_rho", dest="dts_k_rho", metavar="DTB_K_RHO", type=int, default=30,
+                        help="k_rho neighbors for DTB density proxy.")
+    parser.add_argument("--dtb_k_t", "--dts_k_t", dest="dts_k_t", metavar="DTB_K_T", type=int, default=20,
+                        help="k_t neighbor index used to define DTB local threshold radius.")
+    parser.add_argument("--dtb_k_b", "--dts_k_b", dest="dts_k_b", metavar="DTB_K_B", type=int, default=15,
+                        help="k_b neighbors used to compute DTB boundary score.")
+    parser.add_argument("--dtb_mutual_knn", "--dts_mutual_knn", dest="dts_mutual_knn", action="store_true",
+                        help="Use HYBRID mutual-kNN in DTB: rho and t_i from standard kNN; parent links and boundary use mutual-kNN.")
+    parser.add_argument("--dtb_mcluster_min", "--dts_mcluster_min", dest="dts_mcluster_min", metavar="DTB_MCLUSTER_MIN", type=int, default=20,
+                        help="Minimum cluster mass threshold for tiny-cluster safeguards in DTB.")
+    parser.add_argument("--dtb_c_tiny", "--dts_c_tiny", dest="dts_c_tiny", metavar="DTB_C_TINY", type=int, default=1,
+                        help="Maximum selections allowed per tiny cluster (size < dtb_mcluster_min) in DTB.")
+    parser.add_argument("--dtb_max_per_basin", "--dts_max_per_basin", dest="dts_max_per_basin", metavar="DTB_MAX_PER_BASIN", type=int, default=2,
+                        help="Maximum selections allowed per basin in DTB (auto-tuner may set 1 or 2).")
+    parser.add_argument("--dtb_deg_min_tiny", "--dts_deg_min_tiny", dest="dts_deg_min_tiny", metavar="DTB_DEG_MIN_TINY", type=int, default=10,
                         help="Tiny-basin fallback gate: minimum mutual degree for tiny basin candidates.")
-    parser.add_argument("--dts_b_min_tiny", type=float, default=0.6,
+    parser.add_argument("--dtb_b_min_tiny", "--dts_b_min_tiny", dest="dts_b_min_tiny", metavar="DTB_B_MIN_TINY", type=float, default=0.6,
                         help="Tiny-basin fallback gate: minimum boundary score for tiny basin candidates.")
-    parser.add_argument("--dts_tune_hparams", dest="dts_tune_hparams", action="store_true",
-                        help="Enable DTS hyperparameter tuning (default: enabled).")
-    parser.add_argument("--no_dts_tune_hparams", dest="dts_tune_hparams", action="store_false",
-                        help="Disable DTS hyperparameter mutation; diagnostics/tuner decisions are still logged.")
+    parser.add_argument("--dtb_tune_hparams", "--dts_tune_hparams", dest="dts_tune_hparams", action="store_true",
+                        help="Enable DTB hyperparameter tuning (default: enabled).")
+    parser.add_argument("--no_dtb_tune_hparams", "--no_dts_tune_hparams", dest="dts_tune_hparams", action="store_false",
+                        help="Disable DTB hyperparameter mutation; diagnostics/tuner decisions are still logged.")
     parser.set_defaults(dts_tune_hparams=True)
-    parser.add_argument("--dts_clip_model_alias", type=str, default=None,
+    parser.add_argument("--dtb_clip_model_alias", "--dts_clip_model_alias", dest="dts_clip_model_alias", type=str, default=None,
                         choices=sorted(DTS_CLIP_MODEL_ALIASES.keys()),
-                        help="DTS embedding model alias key (optional; if omitted, dts_clip_model_name is used, then default is biomedclip).")
-    parser.add_argument("--dts_clip_model_name", type=str, default=None,
-                        help="(Legacy fallback) DTS embedding model id or alias; ignored if dts_clip_model_alias is set.")
+                        help="DTB embedding model alias key (optional; if omitted, dtb_clip_model_name is used, then default is biomedclip).")
+    parser.add_argument("--dtb_clip_model_name", "--dts_clip_model_name", dest="dts_clip_model_name", metavar="DTB_CLIP_MODEL_NAME", type=str, default=None,
+                        help="DTB embedding model id or alias; ignored if dtb_clip_model_alias is set.")
     parser.add_argument("--clip_batch_size", type=int, default=32,
-                        help="Batch size used by DTS image embedding model.")
+                        help="Batch size used by DTB image embedding model.")
     parser.add_argument("--diagnostic_mode", action="store_true",
-                        help="Enable DTS diagnostics artifacts (plots/panels/purity reports).")
+                        help="Enable DTB diagnostics artifacts (plots/panels/purity reports).")
     parser.add_argument("--show_interactive", action="store_true",
                         help="Show diagnostics figures interactively (diagnostic_mode must be enabled).")
     parser.add_argument("--diagnostic_every", type=int, default=2,
                         help="Save heavy diagnostics every N rounds when diagnostic_mode is enabled.")
     parser.add_argument("--diagnostic_outdir", type=str, default="diagnostics/",
-                        help="Directory for DTS diagnostics JSONL and per-round artifacts.")
+                        help="Directory for DTB diagnostics JSONL and per-round artifacts.")
     parser.add_argument("--diagnostic_seed", type=int, default=0,
                         help="Random seed used by diagnostics downsampling/PCA helpers.")
     parser.add_argument("--max_images_per_panel", type=int, default=40,
                         help="Maximum images to render in any diagnostics panel.")
 
-    # MDL parameters
+    # CA parameters
     parser.add_argument("--alpha", type=float, default=0.01,
                         help="Coefficient for caption length in caption complexity.")
     parser.add_argument("--beta", type=float, default=0.1,
                         help="Coefficient for redundancy in caption complexity.")
     parser.add_argument("--lambda_mdl", type=float, default=0.1,
-                        help="Lambda parameter for MDL loss (trade-off between error and DL).")
+                        help="Lambda parameter for CA loss (trade-off between error and DL).")
     parser.add_argument("--lambda_c", type=float, default=0.5,
                         help="Lambda parameter for selection score (trade-off between uncertainty and ECC).")
     parser.add_argument("--K_uncertainty", type=int, default=5,
                         help="Number of stochastic VLM calls for uncertainty estimation.")
     parser.add_argument("--mdl_tol", type=float, default=1e-3,
-                        help="Tolerance for MDL loss convergence.")
+                        help="Tolerance for CA loss convergence.")
     parser.add_argument("--stopping_accuracy", type=float, default=90.0,
                         help="Stop when validation average class accuracy (percent) reaches this threshold.")
     parser.add_argument("--max_rounds", type=int, default=20,
@@ -4906,7 +4945,7 @@ def parse_arguments():
     parser.add_argument("--invalid_output_max_retries", type=int, default=3,
                         help="Total VLM attempts for invalid model outputs before marking predictions invalid.")
     parser.add_argument("--uncertainty_cache_path", type=str, default="logs/uncertainty_cache.jsonl",
-                        help="Path to shared JSONL cache for stochastic label counts used by MDL/entropy.")
+                        help="Path to shared JSONL cache for stochastic label counts used by CA/U.")
 
     # VLM generation parameters (passed as gen_kwargs)
     parser.add_argument("--model", type=str, default="gpt-4o",
@@ -4946,15 +4985,15 @@ def parse_arguments():
     if args.candidate_pool_size is not None and args.candidate_pool_size < -1:
         parser.error("--candidate_pool_size must be -1 (for full pool) or a non-negative integer.")
     if args.dts_mcluster_min < 0:
-        parser.error("--dts_mcluster_min must be a non-negative integer.")
+        parser.error("--dtb_mcluster_min must be a non-negative integer.")
     if args.dts_c_tiny < 0:
-        parser.error("--dts_c_tiny must be a non-negative integer.")
+        parser.error("--dtb_c_tiny must be a non-negative integer.")
     if args.dts_max_per_basin not in (1, 2):
-        parser.error("--dts_max_per_basin must be 1 or 2.")
+        parser.error("--dtb_max_per_basin must be 1 or 2.")
     if args.dts_deg_min_tiny < 0:
-        parser.error("--dts_deg_min_tiny must be a non-negative integer.")
+        parser.error("--dtb_deg_min_tiny must be a non-negative integer.")
     if args.dts_b_min_tiny < 0.0 or args.dts_b_min_tiny > 1.0:
-        parser.error("--dts_b_min_tiny must be in [0, 1].")
+        parser.error("--dtb_b_min_tiny must be in [0, 1].")
     if args.diagnostic_every <= 0:
         parser.error("--diagnostic_every must be a positive integer.")
     if args.max_images_per_panel <= 0:
