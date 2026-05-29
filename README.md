@@ -89,7 +89,6 @@ Core run arguments:
 
 Input and output paths:
 
-- `--init_prompts_path`: root containing fold seed prompts; by default APT loads `datasets/<dataset>/fold-<fold>/seed.json`.
 - `--system_prompt_1`, `--system_prompt_2`: system prompt files.
 - `--unlabeled_data_json_path`: explicit candidate-pool JSONL path.
 - `--val_json_path`: explicit validation JSONL path.
@@ -226,7 +225,7 @@ Each JSONL row should contain an image path and a class label. The Lurcher manif
 
 For the active-learning modes, `train.jsonl` is treated as the unlabeled candidate pool, `val.jsonl` is used for validation, and `test.jsonl` is used for the final test evaluation.
 
-Seed prompts are loaded from each fold directory:
+Seed prompts are part of the fold directory and are loaded automatically from:
 
 ```text
 datasets/<dataset_name>/fold-<fold_number>/seed.json

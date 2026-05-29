@@ -27,6 +27,7 @@ def test_fold_argument_logic():
     apt = APT(
         system_prompt_1_path="dummy1",
         system_prompt_2_path="dummy2",
+        selection_method="dts",
         K_uncertainty=K,
         fold=fold,
         max_rounds=20,
@@ -68,7 +69,6 @@ def test_fold_argument_logic():
         unlabeled_data_json_path = None
         val_json_path = None
         label_map = None
-        init_prompts_path = "datasets"
         checkpoint_path = "checkpoint.json"
         prompt_set_path = "final_prompt_set.json"
         
@@ -82,7 +82,7 @@ def test_fold_argument_logic():
         if args.unlabeled_data_json_path is None:
             args.unlabeled_data_json_path = f"datasets/{args.dataset}/fold-{args.fold}/train.jsonl"
         if args.val_json_path is None:
-            args.val_json_path = f"datasets/{args.dataset}/fold-{args.fold}/test.jsonl"
+            args.val_json_path = f"datasets/{args.dataset}/fold-{args.fold}/val.jsonl"
             
         if args.checkpoint_path == "checkpoint.json":
             args.checkpoint_path = f"checkpoint_fold={args.fold}.json"
@@ -96,7 +96,7 @@ def test_fold_argument_logic():
     
     
     expected_unlabeled = "datasets/microscopy_lurcher/fold-6/train.jsonl"
-    expected_val = "datasets/microscopy_lurcher/fold-6/test.jsonl"
+    expected_val = "datasets/microscopy_lurcher/fold-6/val.jsonl"
     expected_checkpoint = "checkpoint_fold=6.json"
     expected_prompt_set = "final_prompt_set_fold=6.json"
     
@@ -121,11 +121,7 @@ def test_fold_argument_logic():
         print(f"[FAIL] Prompt set path mismatch. Got {args.prompt_set_path}")
 
     # Test 3: Initialize Seed Path Logic
-    init_prompts_path = "datasets"
-    if args.fold is not None:
-        file_path = os.path.join(init_prompts_path, args.dataset, f"fold-{args.fold}", "seed.json")
-    else:
-        file_path = os.path.join(init_prompts_path, args.dataset, "seed.json")
+    file_path = os.path.join("datasets", args.dataset, f"fold-{args.fold}", "seed.json")
         
     expected_seed_path = "datasets/microscopy_lurcher/fold-6/seed.json"
     print(f"Resolved Seed Path: {file_path}")

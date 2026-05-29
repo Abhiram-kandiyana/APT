@@ -2405,33 +2405,14 @@ class APT:
     # -------------------------------------------------------
     # INITIAL SEED
     # -------------------------------------------------------
-    def initialize_seed(self, init_prompts_path: str, dataset: str, fold: int = None):
+    def initialize_seed(self, seed_json_path: str):
         """
         Load seed examples from a JSON file.
         """
 
-        seed_root = Path(init_prompts_path)
-        candidates = []
-        if fold is not None:
-            fold_dir = seed_root / str(dataset) / f"fold-{fold}"
-            candidates.extend([
-                fold_dir / "seed.json",
-                fold_dir / "seed.jsonl",
-                seed_root / f"{dataset}_fold={fold}.json",
-                seed_root / f"{dataset}_fold={fold}",
-            ])
-        else:
-            candidates.extend([
-                seed_root / str(dataset) / "seed.json",
-                seed_root / str(dataset) / "seed.jsonl",
-                seed_root / f"{dataset}.json",
-                seed_root / str(dataset),
-            ])
-
-        file_path = next((path for path in candidates if path.exists()), None)
-        if file_path is None:
-            searched = "\n".join(f"  - {path}" for path in candidates)
-            raise FileNotFoundError(f"Initial prompts file not found. Searched:\n{searched}")
+        file_path = Path(seed_json_path)
+        if not file_path.exists():
+            raise FileNotFoundError(f"Initial seed prompts file not found: {file_path}")
 
         with open(file_path, 'r') as f:
             data = json.load(f)
@@ -4800,8 +4781,6 @@ def parse_arguments():
                         help="Path to the second system prompt file.")
 
     # Dataset and Prompts
-    parser.add_argument("--init_prompts_path", type=str, default="datasets",
-                        help="Root containing fold seed prompts. Defaults to datasets/<dataset>/fold-<fold>/seed.json.")
     parser.add_argument("--dataset", type=str, required=False,
                         help="Name of the dataset.")
     parser.add_argument("--fold", type=int, default=None,
@@ -5057,6 +5036,7 @@ if __name__ == "__main__":
         unlabeled_data_json_path = args.unlabeled_data_json_path
         val_json_path = args.val_json_path
         test_json_path = args.test_json_path
+        seed_json_path = f"datasets/{args.dataset}/fold-{fold_num}/seed.json"
         if unlabeled_data_json_path is None:
             unlabeled_data_json_path = f"datasets/{args.dataset}/fold-{fold_num}/train.jsonl"
         if val_json_path is None:
@@ -5141,7 +5121,7 @@ if __name__ == "__main__":
             else:
                 print("Zero-shot mode: skipping seed prompts, unlabeled data, validation, and oracle correction.")
         else:
-            apt.initialize_seed(args.init_prompts_path, args.dataset, fold=fold_num)
+            apt.initialize_seed(seed_json_path)
             apt.unlabeled_data = load_data(unlabeled_data_json_path, args.label_map)
             print("Unlabeled data size: ", len(apt.unlabeled_data))
 
