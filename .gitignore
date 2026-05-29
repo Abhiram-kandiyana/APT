@@ -9,6 +9,12 @@ __pycache__/
 *.tif
 
 # Runtime/output artifacts
+hf_dataset_export/
+prompt_banks/
+images/microscopy_lurcher/
+folds/
+metadata/
+datasets/
 logs/*
 !logs/.gitkeep
 diagnostics/*

@@ -29,6 +29,26 @@ export OPENAI_API_KEY="..."
 
 You can also place the key in a local `.env` file because `main.py` calls `load_dotenv()`.
 
+Download the Lurcher images, fold manifests, metadata, and prompt bank from the Hugging Face dataset repository:
+
+```bash
+python setup_lurcher_data.py
+```
+
+The script downloads from:
+
+```text
+USF-CS-Microscopy-Image-Analysis/Lurcher_10x
+```
+
+and creates the local paths used by the code:
+
+```text
+images/microscopy_lurcher/
+datasets/microscopy_lurcher/fold-<fold>/
+prompt_banks/microscopy_lurcher.json
+```
+
 An example of a run for the current microscopy Lurcher dataset with APT-DTS configuration for one fold:
 
 ```bash
@@ -79,7 +99,7 @@ Input and output paths:
 - `--prompt_set_path`: final prompt-set output path; a selection suffix is added.
 - `--vlm_log_path`: VLM response log path; a selection suffix is added.
 - `--oracle_path`: prompt bank or oracle-cache JSON path; if this path is missing, APT falls back to manual correction.
-- `--oracle_script_path`: optional path to APT-v3/oracle.py.
+- `--oracle_script_path`: optional path to `oracle.py`.
 - `--correction_tool_path`: optional path to `apt_correction_tool_v2.py` for manual correction fallback.
 - `--logs_dir`: logs and intra-round checkpoints.
 - `--prompts_root`: pre/post-oracle prompt files.
@@ -151,6 +171,40 @@ Baselines:
 - `--selection_method zero_shot`: skips seed prompts, unlabeled data, validation, and oracle correction, then evaluates on the test set.
 - `--selection_method one_shot`: loads `--one_shot_prompt_set_path`, skips active selection, and evaluates on the test set.
 
+## Data Setup
+
+The public repository does not store Lurcher images, fold manifests, or the Lurcher prompt bank directly. The Hugging Face dataset repository is the source of truth for those artifacts:
+
+```text
+USF-CS-Microscopy-Image-Analysis/Lurcher_10x
+```
+
+Run:
+
+```bash
+python setup_lurcher_data.py
+```
+
+This downloads:
+
+```text
+images/microscopy_lurcher/
+folds/microscopy_lurcher/
+metadata/
+prompt_banks/microscopy_lurcher.json
+```
+
+It then copies fold manifests into the runner-compatible layout:
+
+```text
+datasets/microscopy_lurcher/fold-<fold>/
+  train.jsonl
+  val.jsonl
+  test.jsonl
+```
+
+Use `python setup_lurcher_data.py --skip-images` to download only manifests, metadata, and the prompt bank for quick setup checks.
+
 ## Data Layout
 
 APT expects a JSONL file scoped for each fold under:
@@ -159,17 +213,16 @@ APT expects a JSONL file scoped for each fold under:
 datasets/<dataset_name>/fold-<fold_number>/
   train.jsonl
   val.jsonl
-  val_selected.jsonl
   test.jsonl
 ```
 
-Each JSONL row should contain an image path and a class label:
+Each JSONL row should contain an image path and a class label. The Lurcher manifests downloaded by `setup_lurcher_data.py` use paths relative to the repository root:
 
 ```json
-{"image_path": "/absolute/path/to/image.jpg", "class": "lurcher"}
+{"image_path": "images/microscopy_lurcher/lurcher/5917/5917_lurcher_10x_lurcher_1_1_Image_01.jpg", "class": "lurcher"}
 ```
 
-For the active-learning modes, `train.jsonl` is treated as the unlabeled candidate pool, `val_selected.jsonl` is preferred for validation when present, and `test.jsonl` is used for the final test evaluation. If `val_selected.jsonl` does not exist, the code falls back to `val.jsonl`.
+For the active-learning modes, `train.jsonl` is treated as the unlabeled candidate pool, `val.jsonl` is used for validation, and `test.jsonl` is used for the final test evaluation.
 
 Seed prompts are loaded from:
 
@@ -202,10 +255,10 @@ The current code automatically sets `--label_map wild lurcher` only when `--data
 
 In every active-learning round, APT asks the VLM to classify the selected active-set images and writes those raw predictions to a pre-correction prompt file under `prompt_sets/`. It then calls the external oracle script to turn those raw predictions into corrected prompt examples for the next round.
 
-By default APT calls:
+By default APT calls the repository-local oracle script:
 
 ```text
-../APT-v3/oracle.py
+oracles/microscopy_lurcher/oracle.py
 ```
 
 The paths written for a round look like:
@@ -227,12 +280,12 @@ python main.py \
   --dataset microscopy_lurcher \
   --fold 5 \
   --selection_method dts \
-  --oracle_path /path/to/LurcherData_prompt_bank.json
+  --oracle_path prompt_banks/microscopy_lurcher.json
 ```
 
-If `--oracle_path` points to an existing file, APT calls `oracle.py` with that file as `--prompt_bank_path`. If `--oracle_path` is omitted at the class/API level, APT preserves the older behavior and calls `oracle.py` without an explicit prompt-bank path, letting that script try to auto-resolve one from `APT-v3`. In normal CLI runs, the default `--oracle_path` is `oracle.json`; if that file does not exist, or if the user passes any missing/invalid prompt-bank path, APT skips prompt-bank correction and launches the manual correction tool directly. The manual corrections are written to the normal corrected prompt file and then merged into the oracle cache at `--oracle_path`.
+If `--oracle_path` points to an existing file, APT calls `oracle.py` with that file as `--prompt_bank_path`. If the prompt bank is missing, APT skips prompt-bank correction and launches the manual correction tool directly. The manual corrections are written to the normal corrected prompt file and then merged into the oracle cache at `--oracle_path`.
 
-Use `--oracle_script_path` if the oracle script lives somewhere else. Use `--correction_tool_path` if the manual correction GUI is not at `apt_correction_tool_v2.py` in this repository. The current `config.json` points at the local Lurcher prompt bank used in the existing experiments; collaborators using another dataset should override `--oracle_path` with their own bank/cache path, or let the missing path trigger manual correction for a new cache.
+Use `--oracle_script_path` if the oracle script lives somewhere else. Use `--correction_tool_path` if the manual correction GUI is not at `apt_correction_tool_v2.py` in this repository. The current `config.json` points at the downloadable Lurcher prompt bank path above; collaborators using another dataset should override `--oracle_path` with their own bank/cache path, or let the missing path trigger manual correction for a new cache.
 
 For a dry run that skips the external oracle and writes passthrough corrected prompts, add:
 
@@ -245,11 +298,16 @@ For a dry run that skips the external oracle and writes passthrough corrected pr
 ```text
 main.py                      Main APT runner and CLI.
 config.json                  Current experiment defaults.
+setup_lurcher_data.py        Downloads and arranges Lurcher data from Hugging Face.
 utils.py                     JSONL loading, label extraction, split helpers.
 dts_sampling.py              DTS embedding and candidate scoring utilities.
 dts_diagnostics.py           DTS diagnostics and tuning support.
-datasets/                    Fold JSONL files and split-generation helpers.
+datasets/                    Download target for fold JSONL files.
+folds/                       Downloaded Hugging Face fold manifests.
+images/                      Downloaded Hugging Face image files.
 init_prompts/                Initial prompt examples per dataset/fold.
+oracles/                     Oracle correction scripts.
+prompt_banks/                Downloaded oracle prompt banks.
 system_prompts/              Dataset-specific system prompts.
 prompt_sets/                 Round prompt sets before and after oracle correction.
 logs/                        VLM logs, uncertainty caches, and intra-round logs.
@@ -308,16 +366,14 @@ datasets/my_dataset/
   fold-1/
     train.jsonl
     val.jsonl
-    val_selected.jsonl
     test.jsonl
   fold-2/
     train.jsonl
     val.jsonl
-    val_selected.jsonl
     test.jsonl
 ```
 
-For active-learning runs, `train.jsonl` is the candidate pool. The examples are treated as unlabeled during selection, even though the file still contains class labels for bookkeeping and evaluation helpers. `val_selected.jsonl` is preferred for validation if present; otherwise APT uses `val.jsonl`. `test.jsonl` is used for final evaluation after the active-learning rounds finish.
+For active-learning runs, `train.jsonl` is the candidate pool. The examples are treated as unlabeled during selection, even though the file still contains class labels for bookkeeping and evaluation helpers. `val.jsonl` is used for validation. `test.jsonl` is used for final evaluation after the active-learning rounds finish.
 
 Each row should be newline-delimited JSON with an image path and a class label:
 
@@ -325,7 +381,7 @@ Each row should be newline-delimited JSON with an image path and a class label:
 {"image_path": "/absolute/path/to/image.jpg", "class": "class_a"}
 ```
 
-Absolute image paths are the least ambiguous option. If you use relative paths, make sure they resolve correctly from the repository root when you run `python main.py`.
+Relative image paths are preferred for public datasets. Make sure they resolve correctly from the repository root when you run `python main.py`.
 
 ### Add Seed Prompts
 

@@ -1984,9 +1984,12 @@ class APT:
             print(f"Debug mode: wrote passthrough corrected prompts: {prompts_out_path}")
         else:
             default_oracle_script_path = os.path.abspath(
-                os.path.join(os.path.dirname(__file__), "..", "APT-v3", "oracle.py")
+                os.path.join(os.path.dirname(__file__), "oracles", "microscopy_lurcher", "oracle.py")
             )
             oracle_script_path = gen_kwargs.get("oracle_script_path") or default_oracle_script_path
+            correction_tool_path = gen_kwargs.get("correction_tool_path") or os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "apt_correction_tool_v2.py")
+            )
             oracle_dataset_name = gen_kwargs.get("oracle_dataset_name") or resolve_oracle_dataset_name(
                 dataset_name, label_map
             )
@@ -2010,6 +2013,7 @@ class APT:
                     "--input_file", prompts_in_path,
                     "--dataset", oracle_dataset_name,
                     "--output_file", prompts_out_path,
+                    "--correction_tool_path", correction_tool_path,
                 ]
                 if self.oracle_path:
                     cmd.extend(["--prompt_bank_path", self.oracle_path])
@@ -4803,10 +4807,10 @@ def parse_arguments():
                         help="Path to unlabeled data json file (optional if fold provided).")
     parser.add_argument("--vlm_log_path", type=str, default=None,
                         help="Path to JSON file for logging VLM responses (selection-method suffix added automatically).")
-    parser.add_argument("--oracle_path", type=str, default="oracle.json",
-                        help="Path to oracle cache JSON file.")
+    parser.add_argument("--oracle_path", type=str, default="prompt_banks/microscopy_lurcher.json",
+                        help="Path to oracle cache or prompt bank JSON file.")
     parser.add_argument("--oracle_script_path", type=str, default=None,
-                        help="Optional path to APT-v3/oracle.py. Defaults to ../APT-v3/oracle.py from this file.")
+                        help="Optional path to oracle.py. Defaults to oracles/microscopy_lurcher/oracle.py from this repository.")
     parser.add_argument("--correction_tool_path", type=str, default=None,
                         help="Optional path to apt_correction_tool_v2.py used when oracle_path is missing or invalid.")
     parser.add_argument("--oracle_dataset_name", type=str, default=None,
@@ -5045,9 +5049,7 @@ if __name__ == "__main__":
         if unlabeled_data_json_path is None:
             unlabeled_data_json_path = f"datasets/{args.dataset}/fold-{fold_num}/train.jsonl"
         if val_json_path is None:
-            preferred_val_selected = f"datasets/{args.dataset}/fold-{fold_num}/val_selected.jsonl"
-            fallback_val = f"datasets/{args.dataset}/fold-{fold_num}/val.jsonl"
-            val_json_path = preferred_val_selected if os.path.exists(preferred_val_selected) else fallback_val
+            val_json_path = f"datasets/{args.dataset}/fold-{fold_num}/val.jsonl"
         if test_json_path is None:
             test_json_path = f"datasets/{args.dataset}/fold-{fold_num}/test.jsonl"
 
