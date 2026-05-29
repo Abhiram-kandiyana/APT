@@ -83,7 +83,7 @@ def copy_fold_manifests(repo_root: Path) -> None:
             continue
         out_dir = target_root / fold_dir.name
         out_dir.mkdir(parents=True, exist_ok=True)
-        for split_name in ("train.jsonl", "val.jsonl", "test.jsonl"):
+        for split_name in ("train.jsonl", "val.jsonl", "test.jsonl", "seed.json"):
             src = fold_dir / split_name
             if src.exists():
                 shutil.copy2(src, out_dir / split_name)
@@ -95,6 +95,7 @@ def verify_layout(repo_root: Path, skip_images: bool) -> None:
         repo_root / "datasets" / DATASET_KEY / "fold-5" / "train.jsonl",
         repo_root / "datasets" / DATASET_KEY / "fold-5" / "val.jsonl",
         repo_root / "datasets" / DATASET_KEY / "fold-5" / "test.jsonl",
+        repo_root / "datasets" / DATASET_KEY / "fold-5" / "seed.json",
     ]
     if not skip_images:
         required.append(repo_root / "images" / DATASET_KEY)

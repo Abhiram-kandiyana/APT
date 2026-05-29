@@ -10,6 +10,7 @@ __pycache__/
 
 # Runtime/output artifacts
 hf_dataset_export/
+init_prompts/
 prompt_banks/
 images/microscopy_lurcher/
 folds/

@@ -29,7 +29,7 @@ export OPENAI_API_KEY="..."
 
 You can also place the key in a local `.env` file because `main.py` calls `load_dotenv()`.
 
-Download the Lurcher images, fold manifests, metadata, and prompt bank from the Hugging Face dataset repository:
+Download the Lurcher images, fold manifests, seed prompts, metadata, and prompt bank from the Hugging Face dataset repository:
 
 ```bash
 python setup_lurcher_data.py
@@ -89,7 +89,7 @@ Core run arguments:
 
 Input and output paths:
 
-- `--init_prompts_path`: directory containing seed prompt JSON files.
+- `--init_prompts_path`: root containing fold seed prompts; by default APT loads `datasets/<dataset>/fold-<fold>/seed.json`.
 - `--system_prompt_1`, `--system_prompt_2`: system prompt files.
 - `--unlabeled_data_json_path`: explicit candidate-pool JSONL path.
 - `--val_json_path`: explicit validation JSONL path.
@@ -201,6 +201,7 @@ datasets/microscopy_lurcher/fold-<fold>/
   train.jsonl
   val.jsonl
   test.jsonl
+  seed.json
 ```
 
 Use `python setup_lurcher_data.py --skip-images` to download only manifests, metadata, and the prompt bank for quick setup checks.
@@ -214,6 +215,7 @@ datasets/<dataset_name>/fold-<fold_number>/
   train.jsonl
   val.jsonl
   test.jsonl
+  seed.json
 ```
 
 Each JSONL row should contain an image path and a class label. The Lurcher manifests downloaded by `setup_lurcher_data.py` use paths relative to the repository root:
@@ -224,10 +226,10 @@ Each JSONL row should contain an image path and a class label. The Lurcher manif
 
 For the active-learning modes, `train.jsonl` is treated as the unlabeled candidate pool, `val.jsonl` is used for validation, and `test.jsonl` is used for the final test evaluation.
 
-Seed prompts are loaded from:
+Seed prompts are loaded from each fold directory:
 
 ```text
-init_prompts/<dataset_name>_fold=<fold_number>.json
+datasets/<dataset_name>/fold-<fold_number>/seed.json
 ```
 
 System prompts are loaded from the paths passed through `--system_prompt_1` and `--system_prompt_2`; the microscopy defaults are:
@@ -237,7 +239,7 @@ system_prompts/microscopy_lurcher_1.md
 system_prompts/microscopy_lurcher_2.md
 ```
 
-For a new dataset, create the fold JSONL files, create a matching seed-prompt JSON file, add or pass dataset-specific system prompts, and pass a label map:
+For a new dataset, create the fold JSONL files, place a matching `seed.json` in each fold directory, add or pass dataset-specific system prompts, and pass a label map:
 
 ```bash
 python main.py \
@@ -302,10 +304,9 @@ setup_lurcher_data.py        Downloads and arranges Lurcher data from Hugging Fa
 utils.py                     JSONL loading, label extraction, split helpers.
 dts_sampling.py              DTS embedding and candidate scoring utilities.
 dts_diagnostics.py           DTS diagnostics and tuning support.
-datasets/                    Download target for fold JSONL files.
+datasets/                    Download target for fold JSONL files and seed prompts.
 folds/                       Downloaded Hugging Face fold manifests.
 images/                      Downloaded Hugging Face image files.
-init_prompts/                Initial prompt examples per dataset/fold.
 oracles/                     Oracle correction scripts.
 prompt_banks/                Downloaded oracle prompt banks.
 system_prompts/              Dataset-specific system prompts.
@@ -348,7 +349,7 @@ The dataset key appears in these places:
 ```text
 --dataset my_dataset
 datasets/my_dataset/fold-1/train.jsonl
-init_prompts/my_dataset_fold=1.json
+datasets/my_dataset/fold-1/seed.json
 prompt_sets/my_dataset/...
 results/my_dataset/...
 val_results/my_dataset/...
@@ -367,10 +368,12 @@ datasets/my_dataset/
     train.jsonl
     val.jsonl
     test.jsonl
+    seed.json
   fold-2/
     train.jsonl
     val.jsonl
     test.jsonl
+    seed.json
 ```
 
 For active-learning runs, `train.jsonl` is the candidate pool. The examples are treated as unlabeled during selection, even though the file still contains class labels for bookkeeping and evaluation helpers. `val.jsonl` is used for validation. `test.jsonl` is used for final evaluation after the active-learning rounds finish.
@@ -388,11 +391,11 @@ Relative image paths are preferred for public datasets. Make sure they resolve c
 Create one seed-prompt file per fold:
 
 ```text
-init_prompts/my_dataset_fold=1.json
-init_prompts/my_dataset_fold=2.json
+datasets/my_dataset/fold-1/seed.json
+datasets/my_dataset/fold-2/seed.json
 ```
 
-The filename must match the `--dataset` value and fold number. These seed prompts are the initial examples APT uses before it starts selecting new examples.
+These seed prompts are the initial examples APT uses before it starts selecting new examples. The expected shape is a JSON object containing a `prompt` or `prompts` list, where each item has `image_path`, `class`, and `rationale` or `explanation`.
 
 ### Add System Prompts
 

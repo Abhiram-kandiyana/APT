@@ -68,7 +68,7 @@ def test_fold_argument_logic():
         unlabeled_data_json_path = None
         val_json_path = None
         label_map = None
-        init_prompts_path = "init_prompts"
+        init_prompts_path = "datasets"
         checkpoint_path = "checkpoint.json"
         prompt_set_path = "final_prompt_set.json"
         
@@ -121,13 +121,13 @@ def test_fold_argument_logic():
         print(f"[FAIL] Prompt set path mismatch. Got {args.prompt_set_path}")
 
     # Test 3: Initialize Seed Path Logic
-    init_prompts_path = "init_prompts"
+    init_prompts_path = "datasets"
     if args.fold is not None:
-        file_path = os.path.join(init_prompts_path, f"{args.dataset}_fold={args.fold}")
+        file_path = os.path.join(init_prompts_path, args.dataset, f"fold-{args.fold}", "seed.json")
     else:
-        file_path = os.path.join(init_prompts_path, args.dataset)
+        file_path = os.path.join(init_prompts_path, args.dataset, "seed.json")
         
-    expected_seed_path = "init_prompts/microscopy_lurcher_fold=6"
+    expected_seed_path = "datasets/microscopy_lurcher/fold-6/seed.json"
     print(f"Resolved Seed Path: {file_path}")
     
     if file_path == expected_seed_path:
