@@ -11,9 +11,11 @@ The current implementation is centered on `main.py`. It supports several selecti
 - `zero_shot`: test-only baseline with no prompt examples.
 - `one_shot`: test-only baseline using a fixed corrected prompt set.
 
-## Quick Start
+## Quick Start: Reproduce The Lurcher Results
 
-Create an environment for APT.
+This is the recommended path for readers who want to reproduce the microscopy Lurcher experiments before modifying the code. It uses the fixed folds, seed prompts, oracle prompt bank, and defaults used by the current repository setup.
+
+Create an environment for APT:
 
 ```bash
 conda create -n apt python=3.9
@@ -49,7 +51,17 @@ datasets/microscopy_lurcher/fold-<fold>/
 prompt_banks/microscopy_lurcher.json
 ```
 
-An example of a run for the current microscopy Lurcher dataset with APT-DTS configuration for one fold:
+Each fold directory contains all fold-specific inputs used by the runner:
+
+```text
+datasets/microscopy_lurcher/fold-<fold>/
+  train.jsonl
+  val.jsonl
+  test.jsonl
+  seed.json
+```
+
+Run one Lurcher fold with the APT-DTS configuration:
 
 ```bash
 python main.py \
@@ -60,7 +72,7 @@ python main.py \
   --model gpt-4o
 ```
 
-Run several folds in one command:
+Run all currently released Lurcher folds in one command:
 
 ```bash
 python main.py \
@@ -71,7 +83,23 @@ python main.py \
   --model gpt-4o
 ```
 
+The released folds are `5`, `6`, `8`, and `10`. Fold `7` is not included because it was not used for the reported experiments; fold `55` was a dummy/local fold and is not part of the public Hugging Face export.
+
 `config.json` stores the project defaults used by the current experiments. Any CLI argument passed explicitly overrides the value loaded from the config file. `--selection_method` should still be passed on the command line because the argument is marked as required by the parser.
+
+Reproduction outputs are written under:
+
+```text
+results/microscopy_lurcher/
+test_results/microscopy_lurcher/
+val_results/microscopy_lurcher/
+prompt_sets/microscopy_lurcher/
+logs/
+```
+
+Because this workflow queries a VLM, exact results can depend on the model/backend and API behavior available at run time. Use `--model gpt-4o` for the default OpenAI reproduction setting unless you intentionally want a different VLM.
+
+The remaining sections document command-line options, data layout, oracle correction, and how to adapt APT to new datasets.
 
 ## Command-Line Arguments
 
