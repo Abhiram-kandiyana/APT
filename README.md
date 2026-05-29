@@ -1,5 +1,12 @@
 # Active Prompt Tuning
 
+[![Paper](https://img.shields.io/badge/Paper-CVF-blue)](https://openaccess.thecvf.com/content/CVPR2026W/PHAROS-AIF-MIH/papers/Kandiyana_A_Human-in-the-Loop_Framework_for_Efficient_Prompt_Selection_in_Microscopy_Vision-Language_CVPRW_2026_paper.pdf)
+[![Project Page](https://img.shields.io/badge/Project-Page-green)](https://abhiram-kandiyana.github.io/APT/)
+[![Dataset](https://img.shields.io/badge/Dataset-Hugging%20Face-yellow)](https://huggingface.co/datasets/USF-CS-Microscopy-Image-Analysis/Lurcher_10x)
+[![Code](https://img.shields.io/badge/Code-GitHub-black)](https://github.com/abhiram-kandiyana/APT)
+
+This is the code repository for [**A Human-in-the-Loop Framework for Efficient Prompt Selection in Microscopy Vision-Language Models**](https://openaccess.thecvf.com/content/CVPR2026W/PHAROS-AIF-MIH/papers/Kandiyana_A_Human-in-the-Loop_Framework_for_Efficient_Prompt_Selection_in_Microscopy_Vision-Language_CVPRW_2026_paper.pdf), published in the CVPR Workshops 2026 proceedings. The accompanying project page is available at [abhiram-kandiyana.github.io/APT](https://abhiram-kandiyana.github.io/APT/), and the Lurcher microscopy data, fixed folds, seed prompts, metadata, and prompt bank are hosted on [Hugging Face](https://huggingface.co/datasets/USF-CS-Microscopy-Image-Analysis/Lurcher_10x).
+
 Active Prompt Tuning (APT) is an active-learning workflow for improving visual language model prompts on microscopy classification tasks. APT starts from a small set of expert seed examples, uses a VLM to classify validation and candidate images, selects the next useful examples to add to the prompt, sends those examples through an oracle correction step, and repeats until validation performance reaches a target or the run reaches the round limit.
 
 The current implementation is centered on `main.py`. It supports several selection strategies:
@@ -11,7 +18,7 @@ The current implementation is centered on `main.py`. It supports several selecti
 - `zero_shot`: test-only baseline with no prompt examples.
 - `one_shot`: test-only baseline using a fixed corrected prompt set.
 
-## Quick Start: Reproduce The Lurcher Results
+## Quick Start: Reproduce the results in the paper
 
 This is the recommended path for readers who want to reproduce the microscopy Lurcher experiments before modifying the code. It uses the fixed folds, seed prompts, oracle prompt bank, and defaults used by the current repository setup.
 
@@ -200,11 +207,9 @@ Baselines:
 
 ## Data Setup
 
-The public repository does not store Lurcher images, fold manifests, or the Lurcher prompt bank directly. The Hugging Face dataset repository is the source of truth for those artifacts:
+The public GitHub repository does not store Lurcher images, fold manifests, seed prompts, metadata, or the Lurcher prompt bank directly. The Hugging Face dataset repository is the source of truth for those artifacts:
 
-```text
-USF-CS-Microscopy-Image-Analysis/Lurcher_10x
-```
+[USF-CS-Microscopy-Image-Analysis/Lurcher_10x](https://huggingface.co/datasets/USF-CS-Microscopy-Image-Analysis/Lurcher_10x)
 
 Run:
 
