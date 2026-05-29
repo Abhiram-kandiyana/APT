@@ -6,7 +6,7 @@
 
 This is the code repository for [**A Human-in-the-Loop Framework for Efficient Prompt Selection in Microscopy Vision-Language Models**](https://openaccess.thecvf.com/content/CVPR2026W/PHAROS-AIF-MIH/papers/Kandiyana_A_Human-in-the-Loop_Framework_for_Efficient_Prompt_Selection_in_Microscopy_Vision-Language_CVPRW_2026_paper.pdf), published in the CVPR Workshops 2026 proceedings.
 
-Active Prompt Tuning (APT) is an active-learning workflow for improving visual language model prompts on microscopy classification tasks. APT starts from a small set of expert seed examples, uses a VLM to classify validation and candidate images, selects the next useful examples to add to the prompt, sends those examples through an oracle correction step, and repeats until validation performance reaches a target or the run reaches the round limit.
+Active Prompt Tuning (APT) is an active-learning workflow for improving vision language model prompts on microscopy classification tasks. APT starts from a small set of expert seed examples, uses a VLM to classify validation and candidate images, selects the next useful examples to add to the prompt, sends those examples through an oracle correction step, and repeats until validation performance reaches a target or the run reaches the round limit.
 
 The current implementation is centered on `main.py`. It supports several selection strategies:
 
