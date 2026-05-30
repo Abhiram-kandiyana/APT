@@ -4857,16 +4857,18 @@ def parse_arguments():
         "--selection_method",
         type=normalize_selection_method,
         required=True,
-        choices=["ca", "u", "dtb", "random", "zero_shot", "one_shot"],
         help=(
             "Method to run: active-set scoring via 'ca' (APT-CA), 'u' (APT-U), "
-            "'dtb' (APT-DTB), or 'random' (APT). Legacy aliases 'mdl', "
-            "'entropy', and 'dts' are accepted and normalized."
+            "'dtb' (APT-DTB), or 'random' (APT), plus test-only 'zero_shot'. "
+            "Legacy aliases 'mdl', 'entropy', and 'dts' are accepted and normalized."
         ),
     )
-    parser.add_argument("--one_shot_prompt_set_path", type=str,
-                        default="prompt_sets/microscopy_lurcher/one-shot-prompting/prompts_corrected.json",
-                        help="Corrected prompt JSON used by --selection_method one_shot.")
+    parser.add_argument(
+        "--one_shot_prompt_set_path",
+        type=str,
+        default="prompt_sets/microscopy_lurcher/one-shot-prompting/prompts_corrected.json",
+        help=argparse.SUPPRESS,
+    )
     parser.add_argument("--dtb_k", "--dts_k", dest="dts_k", metavar="DTB_K", type=int, default=60,
                         help="k for DTB neighborhood graph construction.")
     parser.add_argument("--dtb_k_rho", "--dts_k_rho", dest="dts_k_rho", metavar="DTB_K_RHO", type=int, default=30,

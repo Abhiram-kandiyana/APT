@@ -15,7 +15,6 @@ The current implementation is centered on `main.py`. It supports several selecti
 - `ca`: APT-CA caption-aware active selection.
 - `dtb`: APT-DTB density-tree boundary selection over image embeddings.
 - `zero_shot`: test-only baseline with no prompt examples.
-- `one_shot`: test-only baseline using a fixed corrected prompt set.
 
 ## Quick Start: Reproduce the results in the paper
 
@@ -115,7 +114,7 @@ Core run arguments:
 - `--dataset`: dataset name under `datasets/`.
 - `--fold`: run one fold.
 - `--folds`: comma-separated fold list, for example `5,6,10`.
-- `--selection_method`: one of `dtb`, `ca`, `u`, `random`, `zero_shot`, or `one_shot`.
+- `--selection_method`: one of `dtb`, `ca`, `u`, `random`, or `zero_shot`.
 - `--model`: VLM model name, defaulting to `gpt-4o` unless overridden by config.
 - `--vlm_backend`: `auto`, `openai`, `transformers`, or `mlx`.
 - `--resume`: resume from the matching checkpoint file.
@@ -199,10 +198,9 @@ Local VLM controls:
 - `--temperature`, `--top_p`, `--max_tokens`: generation parameters.
 - `--label_map`: class labels used to map VLM outputs to numeric labels.
 
-Baselines:
+Baseline:
 
 - `--selection_method zero_shot`: skips seed prompts, unlabeled data, validation, and oracle correction, then evaluates on the test set.
-- `--selection_method one_shot`: loads `--one_shot_prompt_set_path`, skips active selection, and evaluates on the test set.
 
 ## Data Setup
 
