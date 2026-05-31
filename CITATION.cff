@@ -1,0 +1,35 @@
+cff-version: 1.2.0
+message: "If you use this software or the released Lurcher microscopy dataset, please cite the associated CVPR 2026 workshop paper."
+title: "Active Prompt Tuning"
+authors:
+  - family-names: Kandiyana
+    given-names: Abhiram
+  - family-names: Mali
+    given-names: Ankur
+  - family-names: Hall
+    given-names: Lawrence O.
+  - family-names: Mouton
+    given-names: Peter R.
+  - family-names: Goldgof
+    given-names: Dmitry
+url: "https://github.com/Abhiram-kandiyana/APT-Latest"
+repository-code: "https://github.com/Abhiram-kandiyana/APT-Latest"
+license: "PolyForm-Noncommercial-1.0.0"
+preferred-citation:
+  type: conference-paper
+  title: "A Human-in-the-Loop Framework for Efficient Prompt Selection in Microscopy Vision-Language Models"
+  authors:
+    - family-names: Kandiyana
+      given-names: Abhiram
+    - family-names: Mali
+      given-names: Ankur
+    - family-names: Hall
+      given-names: Lawrence O.
+    - family-names: Mouton
+      given-names: Peter R.
+    - family-names: Goldgof
+      given-names: Dmitry
+  collection-title: "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops"
+  start: 6229
+  end: 6238
+  year: 2026

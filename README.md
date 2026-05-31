@@ -3,8 +3,9 @@
 [![Paper](https://img.shields.io/badge/Paper-CVPR-blue)](https://openaccess.thecvf.com/content/CVPR2026W/PHAROS-AIF-MIH/papers/Kandiyana_A_Human-in-the-Loop_Framework_for_Efficient_Prompt_Selection_in_Microscopy_Vision-Language_CVPRW_2026_paper.pdf)
 [![Project Page](https://img.shields.io/badge/Project-Page-green)](https://abhiram-kandiyana.github.io/APT/)
 [![Dataset](https://img.shields.io/badge/Dataset-Hugging%20Face-yellow)](https://huggingface.co/datasets/USF-CS-Microscopy-Image-Analysis/Lurcher_10x)
+[![License](https://img.shields.io/badge/License-Noncommercial-lightgrey)](LICENSE)
 
-This is the code repository for [**A Human-in-the-Loop Framework for Efficient Prompt Selection in Microscopy Vision-Language Models**](https://openaccess.thecvf.com/content/CVPR2026W/PHAROS-AIF-MIH/papers/Kandiyana_A_Human-in-the-Loop_Framework_for_Efficient_Prompt_Selection_in_Microscopy_Vision-Language_CVPRW_2026_paper.pdf), published in the CVPR Workshops 2026 proceedings.
+This is the code repository for [**A Human-in-the-Loop Framework for Efficient Prompt Selection in Microscopy Vision-Language Models**](https://openaccess.thecvf.com/content/CVPR2026W/PHAROS-AIF-MIH/papers/Kandiyana_A_Human-in-the-Loop_Framework_for_Efficient_Prompt_Selection_in_Microscopy_Vision-Language_CVPRW_2026_paper.pdf), published in the CVPR 2026 Workshops proceedings.
 
 Active Prompt Tuning (APT) is an active-learning workflow for improving vision language model prompts on microscopy classification tasks. APT starts from a small set of expert seed examples, uses a VLM to classify validation and candidate images, selects the next useful examples to add to the prompt, sends those examples through an oracle correction step, and repeats until validation performance reaches a target or the run reaches the round limit.
 
@@ -18,7 +19,7 @@ The current implementation is centered on `main.py`. It supports several selecti
 
 ## Quick Start: Reproduce the results in the paper
 
-This is the recommended path for readers who want to reproduce the microscopy Lurcher experiments before modifying the code. It uses the fixed folds, seed prompts, oracle prompt bank, and defaults used by the current repository setup.
+This is the recommended path for readers who want to reproduce the results for the Lurcher dataset from the CVPR 2026 paper. It uses the fixed folds, seed prompts, oracle prompt bank, and defaults used by the current repository setup.
 
 Create an environment for APT:
 
@@ -36,19 +37,13 @@ export OPENAI_API_KEY="..."
 
 You can also place the key in a local `.env` file because `main.py` calls `load_dotenv()`.
 
-Download the Lurcher images, fold manifests, seed prompts, metadata, and prompt bank from the Hugging Face dataset repository:
+Download the Lurcher images, fold manifests, seed prompts, metadata, and prompt bank from the [Hugging Face dataset repository](https://huggingface.co/datasets/USF-CS-Microscopy-Image-Analysis/Lurcher_10x):
 
 ```bash
 python setup_lurcher_data.py
 ```
 
-The script downloads from:
-
-```text
-USF-CS-Microscopy-Image-Analysis/Lurcher_10x
-```
-
-and creates the local paths used by the code:
+This script creates the local paths used by `main.py`:
 
 ```text
 images/microscopy_lurcher/
@@ -88,7 +83,7 @@ python main.py \
   --model gpt-4o
 ```
 
-The released folds are `5`, `6`, `8`, and `10`. Fold `7` is not included because it was not used for the reported experiments; fold `55` was a dummy/local fold and is not part of the public Hugging Face export.
+The released folds are `5`, `6`, `8`, and `10`.
 
 `config.json` stores the project defaults used by the current experiments. Any CLI argument passed explicitly overrides the value loaded from the config file. `--selection_method` should still be passed on the command line because the argument is marked as required by the parser.
 
@@ -204,7 +199,7 @@ Baseline:
 
 ## Data Setup
 
-The public GitHub repository does not store Lurcher images, fold manifests, seed prompts, metadata, or the Lurcher prompt bank directly. The Hugging Face dataset repository is:
+The Hugging Face dataset repository is:
 
 [USF-CS-Microscopy-Image-Analysis/Lurcher_10x](https://huggingface.co/datasets/USF-CS-Microscopy-Image-Analysis/Lurcher_10x)
 
@@ -484,3 +479,27 @@ python main.py \
 ```
 
 After the smoke test, inspect the generated files under `prompt_sets/`, `val_results/`, `test_results/`, `results/`, and `logs/`. Then remove `--debug`, set the correct oracle paths, and run the full experiment.
+
+## Citation Notice
+
+If you find APT useful in your research, please cite:
+
+```bibtex
+@inproceedings{kandiyana2026apt,
+  title={A Human-in-the-Loop Framework for Efficient Prompt Selection in Microscopy Vision-Language Models},
+  author={Kandiyana, Abhiram and Mali, Ankur and Hall, Lawrence O. and Mouton, Peter R. and Goldgof, Dmitry},
+  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops},
+  pages={6229-6238},
+  year={2026}
+}
+```
+
+## License
+
+The source code in this repository is licensed for non-commercial use under the [PolyForm Noncommercial License 1.0.0](LICENSE). Commercial use, including use in commercial products, services, or proprietary grant-funded deliverables, requires separate written permission from the rights holders.
+
+The Lurcher 10x microscopy dataset distributed through Hugging Face is licensed separately under the [Creative Commons Attribution-NonCommercial 4.0 International License](https://creativecommons.org/licenses/by-nc/4.0/). If you use the code, dataset, folds, or prompt resources, cite the paper above and retain the required license and attribution notices.
+
+## Contact
+
+For questions or feedback, please open an issue on [GitHub](https://github.com/Abhiram-kandiyana/APT-Latest/issues/new) or reach out via the [project page](https://abhiram-kandiyana.github.io/APT/).
