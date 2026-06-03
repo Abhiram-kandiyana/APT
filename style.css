@@ -15,6 +15,7 @@ html {
   background: #ffffff;
   color: var(--text);
   font-family: Arial, Helvetica, sans-serif;
+  scroll-behavior: smooth;
 }
 
 body {
@@ -26,6 +27,7 @@ body {
 .paper-page {
   min-height: 100vh;
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
   justify-content: center;
   padding: 34px 28px 64px;
@@ -36,11 +38,122 @@ body {
   text-align: center;
 }
 
+.abstract-section {
+  width: min(1380px, 100%);
+  margin: 68px auto 0;
+  color: var(--muted);
+}
+
+.abstract-section h2 {
+  margin: 0 0 30px;
+  color: var(--text);
+  font-size: clamp(32px, 3.4vw, 58px);
+  font-weight: 700;
+  line-height: 1.08;
+  text-align: center;
+}
+
+.abstract-section p {
+  margin: 0;
+  font-size: clamp(17px, 1.4vw, 25px);
+  line-height: 1.48;
+  letter-spacing: 0;
+  text-align: justify;
+  text-justify: inter-word;
+}
+
+.abstract-section strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.abstract-section em {
+  font-style: italic;
+}
+
+.examples-section {
+  width: min(1620px, 94%);
+  margin: 72px auto 0;
+  color: var(--muted);
+}
+
+.examples-section h2 {
+  margin: 0 0 28px;
+  color: var(--text);
+  font-size: clamp(31px, 3vw, 52px);
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.caption-examples {
+  margin: 0;
+}
+
+.example-stack {
+  display: grid;
+  gap: 24px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+.example-stack img {
+  width: 100%;
+  min-width: 1040px;
+  height: auto;
+  display: block;
+  border-radius: 0;
+}
+
+.caption-examples figcaption {
+  max-width: 1440px;
+  margin: 22px auto 0;
+  color: var(--muted);
+  font-size: clamp(14px, 1vw, 19px);
+  line-height: 1.45;
+  text-align: left;
+}
+
+.caption-examples figcaption strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.bibtex-section {
+  width: min(1440px, 100%);
+  margin: 76px auto 0;
+  scroll-margin-top: 28px;
+}
+
+.bibtex-section h2 {
+  margin: 0 0 30px;
+  color: var(--text);
+  font-size: clamp(32px, 3.2vw, 56px);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.bibtex-section pre {
+  margin: 0;
+  overflow-x: auto;
+  border-radius: 0;
+  background: #f4f4f4;
+  padding: 34px 38px;
+}
+
+.bibtex-section code {
+  color: var(--muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: clamp(15px, 1.2vw, 21px);
+  line-height: 1.5;
+  white-space: pre;
+}
+
 h1 {
   max-width: 1500px;
-  margin: 0 auto 42px;
+  margin: 0 auto 36px;
   color: var(--text);
-  font-size: clamp(40px, 4.8vw, 78px);
+  font-size: clamp(34px, 4.25vw, 70px);
   font-weight: 600;
   line-height: 1.14;
   letter-spacing: 0;
@@ -48,9 +161,9 @@ h1 {
 
 .authors {
   max-width: 1660px;
-  margin: 0 auto 18px;
+  margin: 0 auto 14px;
   color: var(--muted);
-  font-size: clamp(20px, 1.95vw, 34px);
+  font-size: clamp(18px, 1.68vw, 29px);
   line-height: 1.52;
 }
 
@@ -75,7 +188,7 @@ sup {
   max-width: 1440px;
   margin: 0 auto;
   color: var(--muted);
-  font-size: clamp(18px, 1.7vw, 32px);
+  font-size: clamp(16px, 1.45vw, 27px);
   line-height: 1.55;
 }
 
@@ -85,9 +198,9 @@ sup {
 }
 
 .venue {
-  margin: 30px auto 28px;
+  margin: 26px auto 24px;
   color: var(--text);
-  font-size: clamp(22px, 1.85vw, 34px);
+  font-size: clamp(19px, 1.6vw, 29px);
   font-weight: 700;
 }
 
@@ -99,16 +212,16 @@ sup {
 }
 
 .button {
-  min-height: 58px;
+  min-height: 50px;
   display: inline-flex;
   align-items: center;
-  gap: 11px;
-  padding: 12px 25px;
+  gap: 9px;
+  padding: 10px 21px;
   border: 3px solid transparent;
   border-radius: 36px;
   background: var(--button);
   color: #ffffff;
-  font-size: clamp(17px, 1.38vw, 26px);
+  font-size: clamp(15px, 1.18vw, 21px);
   line-height: 1;
   text-decoration: none;
   white-space: nowrap;
@@ -125,8 +238,8 @@ sup {
 }
 
 .button svg {
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   flex: 0 0 auto;
   fill: none;
   stroke: currentColor;
@@ -135,23 +248,41 @@ sup {
   stroke-linejoin: round;
 }
 
+.brand-icon {
+  display: block;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.brand-icon--cvf {
+  width: 27px;
+  height: 21px;
+  border-radius: 3px;
+}
+
+.brand-icon--huggingface,
+.brand-icon--github {
+  width: 22px;
+  height: 22px;
+}
+
 @media (max-width: 720px) {
   .paper-page {
     padding: 28px 18px 48px;
   }
 
   h1 {
-    margin-bottom: 28px;
-    font-size: 34px;
+    margin-bottom: 24px;
+    font-size: 30px;
   }
 
   .authors {
-    font-size: 20px;
+    font-size: 18px;
     line-height: 1.42;
   }
 
   .affiliations {
-    font-size: 18px;
+    font-size: 16px;
   }
 
   .affiliations p {
@@ -167,14 +298,79 @@ sup {
     gap: 10px;
   }
 
+  .abstract-section {
+    margin-top: 48px;
+  }
+
+  .abstract-section h2 {
+    margin-bottom: 20px;
+    font-size: 32px;
+  }
+
+  .abstract-section p {
+    font-size: 16px;
+    line-height: 1.52;
+    text-align: left;
+  }
+
+  .examples-section {
+    width: 100%;
+    margin-top: 50px;
+  }
+
+  .examples-section h2 {
+    margin-bottom: 20px;
+    font-size: 30px;
+  }
+
+  .example-stack {
+    gap: 16px;
+    margin: 0 -18px;
+    padding: 0 18px 8px;
+  }
+
+  .caption-examples figcaption {
+    margin-top: 16px;
+    font-size: 14px;
+  }
+
+  .bibtex-section {
+    margin-top: 54px;
+  }
+
+  .bibtex-section h2 {
+    margin-bottom: 20px;
+    font-size: 32px;
+  }
+
+  .bibtex-section pre {
+    margin: 0 -18px;
+    padding: 24px 18px;
+  }
+
+  .bibtex-section code {
+    font-size: 14px;
+  }
+
   .button {
-    min-height: 48px;
-    padding: 10px 18px;
-    font-size: 17px;
+    min-height: 42px;
+    padding: 8px 15px;
+    font-size: 15px;
   }
 
   .button svg {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
+  }
+
+  .brand-icon--cvf {
+    width: 24px;
+    height: 18px;
+  }
+
+  .brand-icon--huggingface,
+  .brand-icon--github {
+    width: 18px;
+    height: 18px;
   }
 }

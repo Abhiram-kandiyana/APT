@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>APT: Active Prompt Tuning for Microscopy VLMs</title>
     <meta name="description" content="Project page for A Human-in-the-Loop Framework for Efficient Prompt Selection in Microscopy Vision-Language Models.">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=bibtex-scale">
   </head>
   <body>
     <main class="paper-page">
@@ -32,27 +32,15 @@
 
         <nav class="links" aria-label="Project links">
           <a class="button" href="https://openaccess.thecvf.com/content/CVPR2026W/PHAROS-AIF-MIH/papers/Kandiyana_A_Human-in-the-Loop_Framework_for_Efficient_Prompt_Selection_in_Microscopy_Vision-Language_CVPRW_2026_paper.pdf" target="_blank" rel="noopener noreferrer">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-              <path d="M14 2v6h6"></path>
-              <path d="M9 15h6"></path>
-              <path d="M9 18h4"></path>
-            </svg>
+            <img class="brand-icon brand-icon--cvf" src="assets/icons/cvf.svg" width="31" height="24" alt="" aria-hidden="true">
             Paper
           </a>
-          <a class="button" href="#datasets" target="_blank" rel="noopener noreferrer">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <ellipse cx="12" cy="5" rx="8" ry="3"></ellipse>
-              <path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"></path>
-              <path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"></path>
-            </svg>
+          <a class="button" href="https://huggingface.co/datasets/USF-CS-Microscopy-Image-Analysis/Lurcher_10x" target="_blank" rel="noopener noreferrer">
+            <img class="brand-icon brand-icon--huggingface" src="assets/icons/huggingface.svg" width="26" height="26" alt="" aria-hidden="true">
             Datasets
           </a>
           <a class="button" href="https://github.com/abhiram-kandiyana/APT" target="_blank" rel="noopener noreferrer">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="m16 18 6-6-6-6"></path>
-              <path d="m8 6-6 6 6 6"></path>
-            </svg>
+            <img class="brand-icon brand-icon--github" src="assets/icons/github.svg" width="26" height="26" alt="" aria-hidden="true">
             Code
           </a>
           <a class="button" href="mailto:kandiyana@usf.edu" target="_blank" rel="noopener noreferrer">
@@ -62,7 +50,68 @@
             </svg>
             Contact
           </a>
+          <a class="button" href="#bibtex">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M8 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h2"></path>
+              <path d="M16 3h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-2"></path>
+              <path d="M10 8h4"></path>
+              <path d="M10 12h4"></path>
+              <path d="M10 16h4"></path>
+            </svg>
+            BibTeX
+          </a>
         </nav>
+      </section>
+
+      <section class="abstract-section" aria-labelledby="abstract-title">
+        <h2 id="abstract-title">Abstract</h2>
+        <p>
+          Deep-learning pipelines for microscopy image classification often require expensive, labor- and time-intensive
+          expert annotation to produce high-quality ground truth for training. Recent work has shown that prompt tuning
+          of vision-language models (VLMs) can reduce manual annotation by constructing a small prompt set of
+          expert-verified image-caption exemplars that is reused as few-shot context to classify all remaining images at
+          inference time. To further reduce effort, the VLM can draft captions for candidate exemplars, which experts
+          then verify and lightly edit instead of writing text de novo. However, two practical questions remain
+          unaddressed: (1) which unlabeled images should be prioritized for verification, and (2) how many verified
+          exemplars are needed to reach a performance target. In this work, we address these questions by formulating
+          prompt-set construction as a target-driven active learning problem that prioritizes which images to annotate.
+          We study three complementary selection criteria under strict low-resource constraints with small unlabeled
+          pools. Experiments show that our methods reach the target performance with substantially fewer expert-verified
+          images than random selection, achieving <strong>100% test accuracy</strong> with
+          <em>as few as ~20 annotated images on average</em>. More broadly, our human-in-the-loop framework demonstrates
+          a human-centered use of generative AI in biomedical image analysis, where experts remain actively involved in
+          verifying and refining model output while significantly reducing annotation cost.
+        </p>
+      </section>
+
+      <section class="examples-section" aria-labelledby="examples-title">
+        <h2 id="examples-title">Qualitative Examples</h2>
+        <figure class="caption-examples">
+          <div class="example-stack" aria-label="Selected APT generated captions and human corrections">
+            <img src="assets/figure/wild2lurcher.png" alt="Example row showing a microscopy image, a Wild model prediction, and a Lurcher human correction with highlighted edits.">
+            <img src="assets/figure/wild2lurcher1.png" alt="Example row showing a microscopy image, a Wild model prediction, and a Lurcher human correction with highlighted edits.">
+            <img src="assets/figure/wild2lurcher2.png" alt="Example row showing a microscopy image, a Wild model prediction, and a Lurcher human correction with highlighted edits.">
+            <img src="assets/figure/lurcher2wild.png" alt="Example row showing a microscopy image, a Lurcher model prediction, and a Wild human correction with highlighted edits.">
+            <img src="assets/figure/lurcher2wild1.png" alt="Example row showing a microscopy image, a Lurcher model prediction, and a Wild human correction with highlighted edits.">
+          </div>
+          <figcaption>
+            <strong>Selected examples of APT generated captions and corresponding human corrections.</strong>
+            Each row shows the microscopy image (left), the model prediction (middle), and the expert-corrected caption
+            (right). Yellow highlights indicate text that was modified by the human expert relative to the
+            model-generated caption.
+          </figcaption>
+        </figure>
+      </section>
+
+      <section class="bibtex-section" id="bibtex" aria-labelledby="bibtex-title">
+        <h2 id="bibtex-title">BibTeX</h2>
+        <pre><code>@inproceedings{kandiyana2026apt,
+  title={A Human-in-the-Loop Framework for Efficient Prompt Selection in Microscopy Vision-Language Models},
+  author={Kandiyana, Abhiram and Mali, Ankur and Hall, Lawrence O. and Mouton, Peter R. and Goldgof, Dmitry},
+  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition},
+  pages={6229-6238},
+  year={2026}
+}</code></pre>
       </section>
     </main>
   </body>
